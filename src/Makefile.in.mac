@@ -1,0 +1,5 @@
+CC=clang
+LD=$(CC)
+
+LIBBLAS = -framework Accelerate
+INCBLAS = -DOSX_ACCELERATE

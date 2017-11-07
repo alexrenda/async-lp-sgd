@@ -1,0 +1,5 @@
+CC=gcc
+LD=$(CC)
+
+LIBBLAS = `pkg-config --libs openblas`
+INCBLAS = `pkg-config --cflags openblas`
