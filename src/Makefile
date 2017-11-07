@@ -12,7 +12,7 @@ SRC = $(shell find . -name "*.c")
 OBJ = $(SRC:.c=.o)
 
 main: $(OBJ)
-	$(LD) $(LDFLAGS) $(INCBLAS) $(LIBBLAS) -o $@ $^
+	$(LD) $(LDFLAGS) $(LIBBLAS) -o $@ $^
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCBLAS) -Wall -MMD -c -o $@ $<
