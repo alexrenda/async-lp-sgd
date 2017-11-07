@@ -1,5 +1,10 @@
 CC=gcc
 LD=$(CC)
 
-LIBBLAS = `pkg-config --libs openblas`
-INCBLAS = `pkg-config --cflags openblas`
+# Default locations
+#LIBBLAS = `pkg-config --libs openblas`
+#INCBLAS = `pkg-config --cflags openblas`
+
+# Change local BLAS file locations
+LIBBLAS=/usr/lib64/libopenblas.so
+INCBLAS=
