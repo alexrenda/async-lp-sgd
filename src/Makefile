@@ -1,4 +1,10 @@
-PLATFORM=mac
+OS=$(shell uname -s)
+ifeq ($(OS),Darwin)
+	PLATFORM?=mac
+else
+	PLATFORM?=gcc
+endif
+
 include Makefile.in.$(PLATFORM)
 
 OPTFLAGS = -Ofast -march=native -fassociative-math -freciprocal-math \
