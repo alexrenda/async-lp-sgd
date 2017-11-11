@@ -2,7 +2,6 @@
 #  include <Accelerate/Accelerate.h>
 #elif defined(__GNUC__) || defined(__GNUG__)
 #  include <cblas.h>
-#  include <mkl.h>
 #else
 #  error you gotta have some blas cmon
 #endif
