@@ -94,7 +94,7 @@ float loss
  ) {
   float loss = 0;
 
-  for (size_t idx = 0; idx < n; idx++) {
+  for (unsigned int idx = 0; idx < n; idx++) {
     const float *x = &xs[idx * d];
     const char y = ys[idx];
 
