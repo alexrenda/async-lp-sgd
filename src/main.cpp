@@ -17,6 +17,8 @@
 #include <string.h>
 #include <math.h>
 
+#include <random>
+
 int main() {
   printf("Hello, world!\n");
 }
