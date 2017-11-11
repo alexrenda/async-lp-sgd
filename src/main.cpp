@@ -165,13 +165,13 @@ int main() {
   printf("]\n");
   */
 
-  dataset_t *train = get_train_dataset();
-  dataset_t *test = get_train_dataset();
-  assert(train->dim == test->dim);
-  float *xs = train->image;
-  char *ys = train->labels;
-  const unsigned int n = train->N;
-  const unsigned int d = train->dim;
+  dataset_t train = get_train_dataset();
+  dataset_t test = get_train_dataset();
+  assert(train.dim == test.dim);
+  float *xs = train.image;
+  char *ys = train.labels;
+  const unsigned int n = train.N;
+  const unsigned int d = train.dim;
 
   const unsigned int niter = 100000;
   const unsigned int nloss = 10;
