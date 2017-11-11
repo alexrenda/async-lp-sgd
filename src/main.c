@@ -57,9 +57,6 @@ void sgd(float* __restrict__ w,
          const float alpha,
          const float lambda
          ) {
-
-  memset(w, 0, sizeof(float) * d);
-
   for (int iter = 0; iter < niter; iter++) {
     const int idx = random_at_most(n);
     const float *x = &xs[idx * d];
