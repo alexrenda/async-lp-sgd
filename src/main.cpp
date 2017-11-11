@@ -103,7 +103,7 @@ void sgd
     sgd_impl(w, grad, xs, ys, n, d, niter, alpha, beta, lambda, selector);
   } else {
     for (int iter = 0; iter < niter; iter += report_loss_every) {
-      int iter_count = min(niter - iter, report_loss_every);
+      int iter_count = std::min(niter - iter, report_loss_every);
       sgd_impl(w, grad, xs, ys, n, d, iter_count, alpha, beta, lambda, selector);
       losses[iter / report_loss_every] = loss(w, xs, ys, n, d, lambda);
     }
