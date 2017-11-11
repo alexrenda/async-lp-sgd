@@ -40,11 +40,11 @@ void sgd
  ) {
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::normal_distribution<float> d(0, 1);
+  std::normal_distribution<float> dist(0, 1);
   float* __restrict__ grad = calloc(sizeof(float) * d);
 
   for (int j = 0; j < d; j++) {
-    w[j] = d(gen);
+    w[j] = dist(gen);
   }
 
   if (report_loss_every == 0) {
