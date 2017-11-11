@@ -19,45 +19,59 @@
 #include <math.h>
 
 int main() {
-  srand(1234);
-
-
-
   printf("Hello, world!\n");
 }
 
-// https://stackoverflow.com/a/6852396
-// Assumes 0 <= max <= RAND_MAX
-// Returns in the closed interval [0, max]
-long random_at_most(long max) {
-  unsigned long
-    // max <= RAND_MAX < ULONG_MAX, so this is okay.
-    num_bins = (unsigned long) max + 1,
-    num_rand = (unsigned long) RAND_MAX + 1,
-    bin_size = num_rand / num_bins,
-    defect   = num_rand % num_bins;
+void sgd
+(
+ float* __restrict__ w,
+ const float* __restrict__ xs,
+ const char* __restrict__ ys,
+ const size_t n,
+ const size_t d,
+ const unsigned int niter,
+ const float alpha,
+ const float beta,
+ const float lambda,
+ const unsigned int seed,
+ const unsigned int report_loss_every,
+ float * __restrict__ losses
+ ) {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::normal_distribution<float> d(0, 1);
+  float* __restrict__ grad = calloc(sizeof(float) * d);
 
-  long x;
-  do {
-    x = random();
+  for (int j = 0; j < d; j++) {
+    w[j] = d(gen);
   }
-  // This is carefully written not to overflow
-  while (num_rand - defect <= (unsigned long)x);
 
-  // Truncated division is intentional
-  return x/bin_size;
+  if (report_loss_every == 0) {
+    sgd_impl(w, grad, xs, ys, n, d, niter, alpha, beta, lambda);
+  } else {
+    for (int iter = 0; iter < niter; iter += report_loss_every) {
+      int iter_count = min(niter - iter, report_loss_every);
+      sgd_impl(w, grad, xs, ys, n, d, iter_count, alpha, beta, lambda);
+      losses[iter / report_loss_every] = loss(w, xs, ys, n, d, lambda);
+    }
+  }
+
+  free(grad);
 }
 
-void sgd(float* __restrict__ w,
-         const float* __restrict__ xs,
-         const char* __restrict__ ys,
-         const size_t n,
-         const size_t d,
-         const unsigned int niter,
-         const float alpha,
-         const float lambda
-         ) {
-  for (int iter = 0; iter < niter; iter++) {
+void sgd_impl
+(float* __restrict__ w,
+ float* __restrict__ grad,
+ const float* __restrict__ xs,
+ const char* __restrict__ ys,
+ const size_t n,
+ const size_t d,
+ const unsigned int niter,
+ const float alpha,
+ const float beta,
+ const float lambda
+ ) {
+  for (unsigned int iter = 0; iter < niter; iter++) {
     const int idx = random_at_most(n);
     const float *x = &xs[idx * d];
     const char y = ys[idx];
@@ -70,13 +84,14 @@ void sgd(float* __restrict__ w,
   }
 }
 
-float loss(const float* __restrict__ w,
-           const float* __restrict__ xs,
-           const char* __restrict__ ys,
-           const size_t n,
-           const size_t d,
-           const float lambda
-          ) {
+float loss
+(const float* __restrict__ w,
+ const float* __restrict__ xs,
+ const char* __restrict__ ys,
+ const size_t n,
+ const size_t d,
+ const float lambda
+ ) {
   float loss = 0;
 
   for (int idx = 0; idx < n; idx++) {
