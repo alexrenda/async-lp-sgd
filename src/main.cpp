@@ -23,6 +23,31 @@ int main() {
   printf("Hello, world!\n");
 }
 
+void sgd_impl
+(float* __restrict__ w,
+ float* __restrict__ grad,
+ const float* __restrict__ xs,
+ const char* __restrict__ ys,
+ const size_t n,
+ const size_t d,
+ const unsigned int niter,
+ const float alpha,
+ const float beta,
+ const float lambda
+ ) {
+  for (unsigned int iter = 0; iter < niter; iter++) {
+    const int idx = random_at_most(n);
+    const float *x = &xs[idx * d];
+    const char y = ys[idx];
+
+    float wTx = cblas_sdot(d, x, 1, w, 1);
+
+    const float scale = -y / (1 + expf(y * wTx));
+
+    SAXPBY(d, -alpha * scale, x, 1, -2 * lambda * alpha, w, 1);
+  }
+}
+
 void sgd
 (
  float* __restrict__ w,
@@ -58,31 +83,6 @@ void sgd
   }
 
   free(grad);
-}
-
-void sgd_impl
-(float* __restrict__ w,
- float* __restrict__ grad,
- const float* __restrict__ xs,
- const char* __restrict__ ys,
- const size_t n,
- const size_t d,
- const unsigned int niter,
- const float alpha,
- const float beta,
- const float lambda
- ) {
-  for (unsigned int iter = 0; iter < niter; iter++) {
-    const int idx = random_at_most(n);
-    const float *x = &xs[idx * d];
-    const char y = ys[idx];
-
-    float wTx = cblas_sdot(d, x, 1, w, 1);
-
-    const float scale = -y / (1 + expf(y * wTx));
-
-    SAXPBY(d, -alpha * scale, x, 1, -2 * lambda * alpha, w, 1);
-  }
 }
 
 float loss
