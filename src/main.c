@@ -2,6 +2,7 @@
 #  include <Accelerate/Accelerate.h>
 #elif defined(__GNUC__) || defined(__GNUG__)
 #  include <cblas.h>
+#  include <mkl.h>
 #else
 #  error you gotta have some blas cmon
 #endif
@@ -14,6 +15,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <math.h>
 
 int main() {
   srand(1234);
