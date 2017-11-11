@@ -54,15 +54,9 @@ void sgd(float* __restrict__ w,
     const float *x = &xs[idx * d];
     const char y = ys[idx];
 
-    float wTx = 0;
-    for (int j = 0; j < d; j++) {
-      wTx += x[j] * w[j];
-    }
-
+    float wTx = cblas_sdot(d, x, 1, w, 1);
     const float scale = -y / (1 + expf(y * wTx));
 
-    for (int j = 0; j < d; j++) {
-      w[j] -= alpha * (scale * x[j] + 2*lambda*w[j]);
-    }
+    catlas_saxpby(d, -alpha * scale, x, 1, -2 * lambda * alpha, w, 1);
   }
 }
