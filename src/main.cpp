@@ -9,7 +9,14 @@
 #ifdef OSX_ACCELERATE
 #  define SAXPBY catlas_saxpby
 #else
-#  define SAXPBY cblas_saxpby
+void saxby(const int n, const float a, const float *x, const int incx, const float b, float *y, const int incy){
+  int xa = 0;
+  int ya = 0;
+  for(int i = 0; i < n; i++, xa += incx, ya += incy){
+    y[ya] = a * x[xa] + b * y[ya];
+  }
+}
+#  define SAXPBY saxby
 #endif
 
 #include <stdio.h>
@@ -17,6 +24,7 @@
 #include <string.h>
 #include <math.h>
 #include <random>
+#include <functional>
 
 #include "mnist.h"
 

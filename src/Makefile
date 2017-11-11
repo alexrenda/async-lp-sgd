@@ -14,7 +14,7 @@ include Makefile.in.$(PLATFORM)
 
 OPTFLAGS = -O3 -march=native
 
-CFLAGS = -std=c++14
+CFLAGS = -std=c++11
 
 SRC = $(shell find . -name "*.cpp")
 OBJ = $(SRC:.cpp=.o)
