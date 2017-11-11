@@ -2,6 +2,14 @@
 #  include <Accelerate/Accelerate.h>
 #elif defined(__GNUC__) || defined(__GNUG__)
 #  include <cblas.h>
+#else
+#  error you gotta have some blas cmon
+#endif
+
+#ifdef OSX_ACCELERATE
+#  define SAXPBY catlas_saxpby
+#else
+#  define SAXPBY cblas_saxpby
 #endif
 
 #include <stdio.h>
@@ -57,6 +65,6 @@ void sgd(float* __restrict__ w,
     float wTx = cblas_sdot(d, x, 1, w, 1);
     const float scale = -y / (1 + expf(y * wTx));
 
-    catlas_saxpby(d, -alpha * scale, x, 1, -2 * lambda * alpha, w, 1);
+    SAXPBY(d, -alpha * scale, x, 1, -2 * lambda * alpha, w, 1);
   }
 }
