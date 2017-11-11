@@ -33,10 +33,11 @@ void sgd_impl
  const unsigned int niter,
  const float alpha,
  const float beta,
- const float lambda
+ const float lambda,
+ std::function<int()> selector
  ) {
   for (unsigned int iter = 0; iter < niter; iter++) {
-    const int idx = random_at_most(n);
+    const int idx = selector();
     const float *x = &xs[idx * d];
     const char y = ys[idx];
 
@@ -65,19 +66,22 @@ void sgd
  ) {
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::normal_distribution<float> dist(0, 1);
+  std::normal_distribution<float> normal_dist(0, 1);
+  std::uniform_int_distribution<int> uniform_dist(1,n);
+  auto selector = std::bind ( uniform_dist, gen );
+
   float* __restrict__ grad = (float*) calloc(d, sizeof(float));
 
   for (int j = 0; j < d; j++) {
-    w[j] = dist(gen);
+    w[j] = normal_dist(gen);
   }
 
   if (report_loss_every == 0) {
-    sgd_impl(w, grad, xs, ys, n, d, niter, alpha, beta, lambda);
+    sgd_impl(w, grad, xs, ys, n, d, niter, alpha, beta, lambda, selector);
   } else {
     for (int iter = 0; iter < niter; iter += report_loss_every) {
       int iter_count = min(niter - iter, report_loss_every);
-      sgd_impl(w, grad, xs, ys, n, d, iter_count, alpha, beta, lambda);
+      sgd_impl(w, grad, xs, ys, n, d, iter_count, alpha, beta, lambda, selector);
       losses[iter / report_loss_every] = loss(w, xs, ys, n, d, lambda);
     }
   }
