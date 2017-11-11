@@ -87,8 +87,7 @@ void sgd
  const unsigned int report_loss_every,
  float * __restrict__ losses
  ) {
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  std::mt19937 gen(seed);
   std::normal_distribution<float> normal_dist(0, 1);
   std::uniform_int_distribution<int> uniform_dist(1,n);
   auto selector = std::bind ( uniform_dist, gen );
