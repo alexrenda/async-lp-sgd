@@ -41,7 +41,7 @@ void sgd
   std::random_device rd;
   std::mt19937 gen(rd());
   std::normal_distribution<float> dist(0, 1);
-  float* __restrict__ grad = calloc(sizeof(float) * d);
+  float* __restrict__ grad = calloc(d, sizeof(float));
 
   for (int j = 0; j < d; j++) {
     w[j] = dist(gen);
