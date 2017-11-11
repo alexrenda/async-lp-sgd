@@ -16,8 +16,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
 #include <random>
+
+#include "mnist.h"
 
 int main() {
   printf("Hello, world!\n");
