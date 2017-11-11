@@ -11,7 +11,7 @@
     * redo how to do sgd
 * Datasets
     * Classification: mnist
-    
+
 # Potential Extensions
 * Linear regression
     * hypothesis
