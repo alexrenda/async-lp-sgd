@@ -79,7 +79,7 @@ float loss(const float* __restrict__ w,
           ) {
   float loss = 0;
 
-  for (int idx = 0; idx < n; idx++) {
+  for (size_t idx = 0; idx < n; idx++) {
     const float *x = &xs[idx * d];
     const char y = ys[idx];
 

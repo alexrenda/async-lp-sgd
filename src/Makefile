@@ -7,24 +7,26 @@ endif
 
 include Makefile.in.$(PLATFORM)
 
-OPTFLAGS = -Ofast -march=native -fassociative-math -freciprocal-math \
-           -fno-signed-zeros -frename-registers -funroll-loops -fmodulo-sched \
-           -fmodulo-sched-allow-regmoves -ftree-vectorize
+# Possible flags to use later
+# -ffast-math -Ofast -fassociative-math -freciprocal-math \
+# -fno-signed-zeros -frename-registers -funroll-loops -fmodulo-sched \
+# -fmodulo-sched-allow-regmoves -ftree-vectorizen
 
-CFLAGS = -std=gnu99
-LDFLAGS = -lm
+OPTFLAGS = -O3 -march=native
 
-SRC = $(shell find . -name "*.c")
-OBJ = $(SRC:.c=.o)
+CFLAGS = -std=c++14
+
+SRC = $(shell find . -name "*.cpp")
+OBJ = $(SRC:.cpp=.o)
 
 main: $(OBJ)
-	$(LD) $(LDFLAGS) $(LIBBLAS) -o $@ $^
+	$(LD) $(LIBBLAS) -o $@ $^
 
-%.o: %.c
-	$(CC) $(CFLAGS) $(INCBLAS) -Wall -MMD -c -o $@ $<
+%.o: %.cpp
+	$(CC) $(CFLAGS) $(OPTFLAGS) $(INCBLAS) -Wall -MMD -c -o $@ $<
 
 clean:
 	rm -f main *.o *.d
 
 # Optimize build with auto-generated dependencies.
--include $(SRC:%.c=%.d)
+-include $(SRC:%.cpp=%.d)
