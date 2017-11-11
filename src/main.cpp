@@ -49,6 +49,29 @@ void sgd_impl
   }
 }
 
+float loss
+(const float* __restrict__ w,
+ const float* __restrict__ xs,
+ const char* __restrict__ ys,
+ const size_t n,
+ const size_t d,
+ const float lambda
+ ) {
+  float loss = 0;
+
+  for (unsigned int idx = 0; idx < n; idx++) {
+    const float *x = &xs[idx * d];
+    const char y = ys[idx];
+
+    float wTx = cblas_sdot(d, x, 1, w, 1);
+    float wTw = cblas_sdot(d, w, 1, w, 1);
+
+    loss += log2f(1 + expf(-y * wTx)) + lambda * wTw;
+  }
+
+  return loss;
+}
+
 void sgd
 (
  float* __restrict__ w,
@@ -87,27 +110,4 @@ void sgd
   }
 
   free(grad);
-}
-
-float loss
-(const float* __restrict__ w,
- const float* __restrict__ xs,
- const char* __restrict__ ys,
- const size_t n,
- const size_t d,
- const float lambda
- ) {
-  float loss = 0;
-
-  for (unsigned int idx = 0; idx < n; idx++) {
-    const float *x = &xs[idx * d];
-    const char y = ys[idx];
-
-    float wTx = cblas_sdot(d, x, 1, w, 1);
-    float wTw = cblas_sdot(d, w, 1, w, 1);
-
-    loss += log2f(1 + expf(-y * wTx)) + lambda * wTw;
-  }
-
-  return loss;
 }
