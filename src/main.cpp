@@ -17,6 +17,7 @@
 #include <string.h>
 #include <math.h>
 #include <random>
+#include <functional>
 
 #include "mnist.h"
 
