@@ -57,14 +57,37 @@ void sgd(float* __restrict__ w,
 
   memset(w, 0, sizeof(float) * d);
 
-  for (int i = 0; i < niter; i++) {
+  for (int iter = 0; iter < niter; iter++) {
     const int idx = random_at_most(n);
     const float *x = &xs[idx * d];
     const char y = ys[idx];
 
     float wTx = cblas_sdot(d, x, 1, w, 1);
+
     const float scale = -y / (1 + expf(y * wTx));
 
     SAXPBY(d, -alpha * scale, x, 1, -2 * lambda * alpha, w, 1);
   }
+}
+
+float loss(const float* __restrict__ w,
+           const float* __restrict__ xs,
+           const char* __restrict__ ys,
+           const size_t n,
+           const size_t d,
+           const float lambda
+          ) {
+  float loss = 0;
+
+  for (int idx = 0; idx < n; idx++) {
+    const float *x = &xs[idx * d];
+    const char y = ys[idx];
+
+    float wTx = cblas_sdot(d, x, 1, w, 1);
+    float wTw = cblas_sdot(d, w, 1, w, 1);
+
+    loss += log2f(1 + expf(-y * wTx)) + lambda * wTw;
+  }
+
+  return loss;
 }
