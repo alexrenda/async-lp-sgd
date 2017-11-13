@@ -9,7 +9,7 @@
 #ifdef OSX_ACCELERATE
 #  define SAXPBY catlas_saxpby
 #else
-void saxby(const int n, const float a, const float *x, const int incx, const float b, float *y, const int incy){
+void inline saxby(const int n, const float a, const float *x, const int incx, const float b, float *y, const int incy){
   int xa = 0;
   int ya = 0;
   for(int i = 0; i < n; i++, xa += incx, ya += incy){
@@ -25,6 +25,7 @@ void saxby(const int n, const float a, const float *x, const int incx, const flo
 #include <math.h>
 #include <random>
 #include <functional>
+#include <cassert>
 
 #include "mnist.h"
 
@@ -95,7 +96,7 @@ void sgd
  ) {
   std::mt19937 gen(seed);
   std::normal_distribution<float> normal_dist(0, 1);
-  std::uniform_int_distribution<int> uniform_dist(1,n);
+  std::uniform_int_distribution<int> uniform_dist(1,n-1);
 
   float* __restrict__ grad = (float*) calloc(d, sizeof(float));
 
@@ -176,7 +177,6 @@ int main() {
   const unsigned int niter = 100000;
   const unsigned int nloss = 10;
   const unsigned int nprint = niter / nloss;
-
   float* __restrict__ w = (float*) malloc(sizeof(float) * d);
   float* __restrict__ losses = (float*) malloc(sizeof(float) * nloss);
   sgd(w, xs, ys, n, d, niter, 0.01, 0.9, 0.001, 1234, nprint, losses);
@@ -191,4 +191,7 @@ int main() {
   for (unsigned int i = 0; i < nloss; i++) {
     printf("Loss: %f\n", losses[i]);
   }
+
+  free_dataset(&train);
+  free_dataset(&test);
 }
