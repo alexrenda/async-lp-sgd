@@ -1,17 +1,20 @@
 #ifndef MNIST_H
 #define MNIST_H
 
+#include <vector>
+
 struct dataset_t {
-  const int N;                     // Number
-  const int dim;                   // Dimensions of an image (28 * 28)
-  const int num_labels;                   // Number of labels (10)
-  float* const __restrict__ labels; // Labels: byte[n][10]
-  float* const __restrict__ image; // Images: byte[n][dim*dim]
+  const int n;                  // Number
+  const int dim;                // Dimensions of an image (28 * 28)
+  const int num_labels;         // Number of labels (10)
+  std::vector<float> labels;    // Labels: byte[n][num_labels]
+  std::vector<float> image;     // Images: byte[n][dim]
+
+  dataset_t(int n, int dim, int num_labels)
+    : n(n), dim(dim), num_labels(num_labels), labels(n * num_labels), image(n * dim) {}
 };
 
 dataset_t get_train_dataset();
 dataset_t get_test_dataset();
-
-void free_dataset(dataset_t* dataset);
 
 #endif /* MNIST_H */

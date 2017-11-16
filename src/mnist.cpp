@@ -20,20 +20,14 @@ inline static void read_file(const char* file_name,
   fread(buffer, buffer_size, 1, ptr); // read 10 bytes to our buffer
 }
 
-inline static dataset_t get_dataset(const int N,
+inline static dataset_t get_dataset(const int n,
                                     const int dim,
                                     const int num_labels,
                                     const char* image_file,
                                     const int img_filesize,
                                     const char* lab_file,
                                     const int lab_filesize) {
-  dataset_t ret = {
-    .N = N,
-    .dim = dim,
-    .num_labels = num_labels,
-    .labels = (float*) calloc(N * num_labels, sizeof(float)),
-    .image = (float*) calloc(N * dim, sizeof(float))
-  };
+  dataset_t ret(n, dim, num_labels);
 
   unsigned char lab_buffer[lab_filesize];
   read_file(lab_file, lab_buffer, lab_filesize);
@@ -46,8 +40,7 @@ inline static dataset_t get_dataset(const int N,
     }
   }
 
-  unsigned char* img_buffer =
-      (unsigned char*) calloc(img_filesize, sizeof(unsigned char));
+  unsigned char* img_buffer = (unsigned char*) calloc(img_filesize, sizeof(unsigned char));
   read_file(image_file, img_buffer, img_filesize);
   int img_offset = 16;
   for (int i = img_offset; i < img_filesize; i++) {
@@ -72,9 +65,4 @@ dataset_t get_test_dataset() {
                      SIZE_TEST_FILE_IMAGE,
                      NAME_TEST_FILE_LABEL,
                      SIZE_TEST_FILE_LABEL);
-}
-
-void free_dataset(dataset_t* dataset) {
-  free(dataset->image);
-  free(dataset->labels);
 }

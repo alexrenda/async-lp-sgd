@@ -35,7 +35,7 @@ void sgd_impl
 (float* __restrict__ w,
  float* __restrict__ grad,
  const float* __restrict__ xs,
- const char* __restrict__ ys,
+ const float* __restrict__ ys,
  const size_t n,
  const size_t d,
  const unsigned int niter,
@@ -59,7 +59,7 @@ void sgd_impl
 float loss
 (const float* __restrict__ w,
  const float* __restrict__ xs,
- const char* __restrict__ ys,
+ const float* __restrict__ ys,
  const size_t n,
  const size_t d,
  const float lambda
@@ -68,7 +68,7 @@ float loss
 
   for (unsigned int idx = 0; idx < n; idx++) {
     const float *x = &xs[idx * d];
-    const char y = ys[idx];
+    const float y = ys[idx];
 
     float wTx = cblas_sdot(d, x, 1, w, 1);
     float wTw = cblas_sdot(d, w, 1, w, 1);
@@ -83,7 +83,7 @@ void sgd
 (
  float* __restrict__ w,
  const float* __restrict__ xs,
- const char* __restrict__ ys,
+ const float* __restrict__ ys,
  const size_t n,
  const size_t d,
  const unsigned int niter,
@@ -169,9 +169,9 @@ int main() {
   dataset_t train = get_train_dataset();
   dataset_t test = get_train_dataset();
   assert(train.dim == test.dim);
-  float *xs = train.image;
-  char *ys = train.labels;
-  const unsigned int n = train.N;
+  float *xs = train.image.data();
+  float *ys = train.labels.data();
+  const unsigned int n = train.n;
   const unsigned int d = train.dim;
 
   const unsigned int niter = 100000;
@@ -191,7 +191,4 @@ int main() {
   for (unsigned int i = 0; i < nloss; i++) {
     printf("Loss: %f\n", losses[i]);
   }
-
-  free_dataset(&train);
-  free_dataset(&test);
 }
