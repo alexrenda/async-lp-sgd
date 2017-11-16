@@ -169,9 +169,9 @@ int main() {
   dataset_t train = get_train_dataset();
   dataset_t test = get_train_dataset();
   assert(train.dim == test.dim);
-  float *xs = train.image;
-  char *ys = train.labels;
-  const unsigned int n = train.N;
+  float *xs = train.image.data();
+  char *ys = train.labels.data();
+  const unsigned int n = train.n;
   const unsigned int d = train.dim;
 
   const unsigned int niter = 100000;
@@ -191,7 +191,4 @@ int main() {
   for (unsigned int i = 0; i < nloss; i++) {
     printf("Loss: %f\n", losses[i]);
   }
-
-  free_dataset(&train);
-  free_dataset(&test);
 }

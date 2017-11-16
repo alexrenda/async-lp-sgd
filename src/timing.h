@@ -12,11 +12,11 @@ class timing_t {
 public:
   timing_t(): total_time(0), steps(0), start_time(-1) {}
 
-  void start_timing_round(){
+  void start_timing_round() {
     start_time = omp_get_wtime();
   }
 
-  void end_timing_round(int stepsTaken){
+  void end_timing_round(int stepsTaken) {
     assert(start_time != -1);
 
     steps += stepsTaken;
@@ -24,8 +24,8 @@ public:
     start_time = -1;
   }
 
-  double time_per_step(){
-    return total_time/steps;
+  double time_per_step() {
+    return total_time / steps;
   }
 };
 

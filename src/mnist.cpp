@@ -20,18 +20,13 @@ inline static void read_file(const char* file_name,
   fread(buffer, buffer_size, 1, ptr); // read 10 bytes to our buffer
 }
 
-inline static dataset_t get_dataset(const int N,
+inline static dataset_t get_dataset(const int n,
                                     const int dim,
                                     const char* image_file,
                                     const int img_filesize,
                                     const char* lab_file,
                                     const int lab_filesize) {
-  dataset_t ret = {
-    .N = N,
-    .dim = dim,
-    .labels = (char*) calloc(N, sizeof(char)),
-    .image = (float*) calloc(N * dim, sizeof(float))
-  };
+  dataset_t ret(n, dim);
 
   unsigned char lab_buffer[lab_filesize];
   read_file(lab_file, lab_buffer, lab_filesize);
@@ -66,9 +61,4 @@ dataset_t get_test_dataset() {
                      SIZE_TEST_FILE_IMAGE,
                      NAME_TEST_FILE_LABEL,
                      SIZE_TEST_FILE_LABEL);
-}
-
-void free_dataset(dataset_t* dataset) {
-  free(dataset->image);
-  free(dataset->labels);
 }
