@@ -71,5 +71,4 @@ dataset_t get_test_dataset() {
 void free_dataset(dataset_t* dataset) {
   free(dataset->image);
   free(dataset->labels);
-  free(dataset);
 }
