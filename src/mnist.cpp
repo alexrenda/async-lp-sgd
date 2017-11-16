@@ -22,6 +22,7 @@ inline static void read_file(const char* file_name,
 
 inline static dataset_t get_dataset(const int N,
                                     const int dim,
+                                    const int num_labels,
                                     const char* image_file,
                                     const int img_filesize,
                                     const char* lab_file,
@@ -29,7 +30,8 @@ inline static dataset_t get_dataset(const int N,
   dataset_t ret = {
     .N = N,
     .dim = dim,
-    .labels = (char*) calloc(N, sizeof(char)),
+    .num_labels = num_labels,
+    .labels = (float*) calloc(N * num_labels, sizeof(float)),
     .image = (float*) calloc(N * dim, sizeof(float))
   };
 
@@ -37,7 +39,11 @@ inline static dataset_t get_dataset(const int N,
   read_file(lab_file, lab_buffer, lab_filesize);
   int lab_offset = 8;
   for (int i = lab_offset; i < lab_filesize; i++) {
-    ret.labels[i - lab_offset] = lab_buffer[i];
+    int lab_index = i - lab_offset;
+    for(int j = 0; j < num_labels; j++){
+      float lab = lab_buffer[i] == j? 1 : 0;
+      ret.labels[lab_index * num_labels + j] = lab;
+    }
   }
 
   unsigned char* img_buffer =
@@ -53,7 +59,7 @@ inline static dataset_t get_dataset(const int N,
 }
 
 dataset_t get_train_dataset() {
-  return get_dataset(60000, 28 * 28,
+  return get_dataset(60000, 28 * 28, 10,
                      NAME_TRAIN_FILE_IMAGE,
                      SIZE_TRAIN_FILE_IMAGE,
                      NAME_TRAIN_FILE_LABEL,
@@ -61,7 +67,7 @@ dataset_t get_train_dataset() {
 }
 
 dataset_t get_test_dataset() {
-  return get_dataset(60000, 28 * 28,
+  return get_dataset(60000, 28 * 28, 10,
                      NAME_TEST_FILE_IMAGE,
                      SIZE_TEST_FILE_IMAGE,
                      NAME_TEST_FILE_LABEL,

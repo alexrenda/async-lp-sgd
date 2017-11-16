@@ -4,7 +4,8 @@
 struct dataset_t {
   const int N;                     // Number
   const int dim;                   // Dimensions of an image (28 * 28)
-  char* const __restrict__ labels; // Labels: byte[n]
+  const int num_labels;                   // Number of labels (10)
+  float* const __restrict__ labels; // Labels: byte[n][10]
   float* const __restrict__ image; // Images: byte[n][dim*dim]
 };
 
