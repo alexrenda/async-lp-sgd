@@ -2,15 +2,15 @@
 #define MNIST_LOW_H
 
 #include <vector>
-#include <random>
+#include <cmath>
 #include "mnist.h"
 
 struct dataset_low_t {
   const int n;                  // Number
   const int dim;                // Dimensions of an image (28 * 28)
   const int num_labels;         // Number of labels (10)
-  std::vector<char> labels;    // Labels: byte[n][num_labels]
-  std::vector<char> image;     // Images: byte[n][dim]
+  std::vector<char> labels;     // Labels: byte[n][num_labels]
+  std::vector<char> image;      // Images: byte[n][dim]
 
   dataset_low_t(dataset_t dataset) :
       n(dataset.n), dim(dataset.dim), num_labels(dataset.num_labels),
@@ -20,8 +20,7 @@ struct dataset_low_t {
         }
 
         for(int i = 0; i < n * dim; i++){
-          double rndDouble = (double) rand() / RAND_MAX;
-          image[i] = dataset.image[i] > rndDouble? 1 : 0;
+          image[i] = (char) lround(dataset.image[i] * 255);
         }
       }
 };
