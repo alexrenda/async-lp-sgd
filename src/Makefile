@@ -14,13 +14,14 @@ include Makefile.in.$(PLATFORM)
 
 OPTFLAGS = -O3 -march=native
 
-CFLAGS = -std=c++11
+CFLAGS = -std=c++11 -fopenmp
+LDFLAGS = -fopenmp
 
 SRC = $(shell find . -name "*.cpp")
 OBJ = $(SRC:.cpp=.o)
 
 main: $(OBJ)
-	$(LD) $(LIBBLAS) -o $@ $^
+	$(LD) $(LDFLAGS) $(LIBBLAS) -o $@ $^
 
 %.o: %.cpp
 	$(CC) $(CFLAGS) $(OPTFLAGS) $(INCBLAS) -Wall -MMD -c -o $@ $<
