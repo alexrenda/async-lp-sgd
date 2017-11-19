@@ -4,6 +4,7 @@
 
 #include "loss.h"
 #include "mblas.h"
+#include "timing.h"
 
 void sgd
 (
@@ -29,8 +30,8 @@ void sgd
   float* __restrict__ G = (float*) calloc(c * W_lda, sizeof(float));
   float* __restrict__ scratch = (float*) malloc(scratch_size(n,d,c));
 
-  for (int j = 0; j < c; j++) {
-    for (int k = 0; k < d; k++) {
+  for (unsigned int j = 0; j < c; j++) {
+    for (unsigned int k = 0; k < d; k++) {
       W[j * W_lda + k] = normal_dist(gen);
     }
   }
@@ -56,6 +57,9 @@ void sgd
   printf("Initial loss: %.1f, error: %.3f\n",
          initial_loss.loss, initial_loss.error);
 
+  timing_t loss_timer = timing_t();
+  timing_t grad_timer = timing_t();
+
   for (unsigned int outer_i = 0; outer_i < n_outer_iter; outer_i++) {
     unsigned int inner_niter;
     if (outer_i == n_outer_iter - 1) {
@@ -72,6 +76,8 @@ void sgd
       multinomial_gradient(G, W, W_lda, x, y, d, c, beta, scratch);
       SAXPBY(c * W_lda, -alpha, G, 1, 1, W, 1);
     }
+
+    loss_timer.start_timing_round();
     loss_t loss = multinomial_loss
       (W,
        W_lda,
@@ -83,6 +89,7 @@ void sgd
        c,
        scratch
        );
+    loss_timer.end_timing_round(1);
 
     printf("Iter %d: ran for %d steps (loss: %.1f, error: %.3f)\n",
            outer_i, inner_niter, loss.loss, loss.error);
@@ -90,6 +97,8 @@ void sgd
     losses[outer_i + 1] = loss.loss;
 
   }
+
+  printf("Time per step: %f\n", loss_timer.time_per_step());
 
   free(G);
 
