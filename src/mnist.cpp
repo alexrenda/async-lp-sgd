@@ -34,9 +34,11 @@ inline static dataset_t get_dataset(const int n,
   int lab_offset = 8;
   for (int i = lab_offset; i < lab_filesize; i++) {
     int lab_index = i - lab_offset;
+
+    ret.labels_idx[lab_index] = lab_buffer[i];
     for(int j = 0; j < num_labels; j++){
       float lab = lab_buffer[i] == j? 1 : 0;
-      ret.labels[lab_index * num_labels + j] = lab;
+      ret.labels_oh[lab_index * num_labels + j] = lab;
     }
   }
 

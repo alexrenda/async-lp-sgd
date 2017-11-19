@@ -1,24 +1,3 @@
-#ifdef OSX_ACCELERATE
-#  include <Accelerate/Accelerate.h>
-#elif defined(__GNUC__) || defined(__GNUG__)
-#  include <cblas.h>
-#else
-#  error you gotta have some blas cmon
-#endif
-
-#ifdef OSX_ACCELERATE
-#  define SAXPBY catlas_saxpby
-#else
-void inline saxby(const int n, const float a, const float *x, const int incx, const float b, float *y, const int incy){
-  int xa = 0;
-  int ya = 0;
-  for(int i = 0; i < n; i++, xa += incx, ya += incy){
-    y[ya] = a * x[xa] + b * y[ya];
-  }
-}
-#  define SAXPBY saxby
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,94 +7,7 @@ void inline saxby(const int n, const float a, const float *x, const int incx, co
 #include <cassert>
 
 #include "mnist.h"
-
-#define CEIL_DIV(n, d) (((n) + (d) - 1) / (d))
-
-void sgd_impl
-(float* __restrict__ w,
- float* __restrict__ grad,
- const float* __restrict__ xs,
- const float* __restrict__ ys,
- const size_t n,
- const size_t d,
- const unsigned int niter,
- const float alpha,
- const float beta,
- const float lambda,
- std::mt19937 &gen,
- std::uniform_int_distribution<int> &dist
- ) {
-  for (unsigned int iter = 0; iter < niter; iter++) {
-    const int idx = dist(gen);
-    const float *x = &xs[idx * d];
-    const char y = ys[idx];
-
-    float wTx = cblas_sdot(d, x, 1, w, 1);
-    const float scale = -y / (1 + expf(y * wTx));
-    SAXPBY(d, -alpha * scale, x, 1, 1 - 2 * lambda * alpha, w, 1);
-  }
-}
-
-float loss
-(const float* __restrict__ w,
- const float* __restrict__ xs,
- const float* __restrict__ ys,
- const size_t n,
- const size_t d,
- const float lambda
- ) {
-  float loss = 0;
-
-  for (unsigned int idx = 0; idx < n; idx++) {
-    const float *x = &xs[idx * d];
-    const float y = ys[idx];
-
-    float wTx = cblas_sdot(d, x, 1, w, 1);
-    float wTw = cblas_sdot(d, w, 1, w, 1);
-
-    loss += log2f(1 + expf(-y * wTx)) + lambda * wTw;
-  }
-
-  return loss;
-}
-
-void sgd
-(
- float* __restrict__ w,
- const float* __restrict__ xs,
- const float* __restrict__ ys,
- const size_t n,
- const size_t d,
- const unsigned int niter,
- const float alpha,
- const float beta,
- const float lambda,
- const unsigned int seed,
- const unsigned int report_loss_every,
- float * __restrict__ losses
- ) {
-  std::mt19937 gen(seed);
-  std::normal_distribution<float> normal_dist(0, 1);
-  std::uniform_int_distribution<int> uniform_dist(1,n-1);
-
-  float* __restrict__ grad = (float*) calloc(d, sizeof(float));
-
-  for (int j = 0; j < d; j++) {
-    w[j] = normal_dist(gen);
-  }
-
-  if (report_loss_every == 0) {
-    sgd_impl(w, grad, xs, ys, n, d, niter, alpha, beta, lambda, gen, uniform_dist);
-  } else {
-    for (int iter = 0; iter < CEIL_DIV(niter, report_loss_every); iter++) {
-      int iter_count = std::min(niter - iter*report_loss_every, report_loss_every);
-      sgd_impl(w, grad, xs, ys, n, d, iter_count, alpha, beta, lambda, gen, uniform_dist);
-      losses[iter] = loss(w, xs, ys, n, d, lambda);
-    }
-  }
-
-  free(grad);
-}
+#include "gd.h"
 
 
 int main() {
@@ -170,23 +62,28 @@ int main() {
   dataset_t test = get_train_dataset();
   assert(train.dim == test.dim);
   float *xs = train.image.data();
-  float *ys = train.labels.data();
+  char *ys = train.labels_idx.data();
   const unsigned int n = train.n;
   const unsigned int d = train.dim;
+  const unsigned int c = train.num_labels;
 
-  const unsigned int niter = 100000;
-  const unsigned int nloss = 10;
-  const unsigned int nprint = niter / nloss;
-  float* __restrict__ w = (float*) malloc(sizeof(float) * d);
+  const unsigned int niter = 10000000;
+  const unsigned int nloss = 10001;
+  float* __restrict__ W = (float*) malloc(sizeof(float) * c * d);
   float* __restrict__ losses = (float*) malloc(sizeof(float) * nloss);
-  sgd(w, xs, ys, n, d, niter, 0.01, 0.9, 0.001, 1234, nprint, losses);
 
+  sgd(W, d, xs, d, ys, n, d, c, niter, 0.001, 0.99, 1234, losses, nloss);
+
+  /*
   printf("w_final = ");
   printf("[");
-  for (int j = 0; j < d; j++) {
-    printf("%.3f,", w[j]);
+  for (int j = 0; j < c; j++) {
+    for (int k = 0; k < d; k++) {
+      printf("%.3f,", W[j * d + k]);
+    }
   }
   printf("]\n");
+  */
 
   for (unsigned int i = 0; i < nloss; i++) {
     printf("Loss: %f\n", losses[i]);
