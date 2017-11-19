@@ -13,7 +13,7 @@ scratch_size
   return sizeof(float) * (n * c);
 }
 
-float multinomial_loss
+loss_t multinomial_loss
 (
  const float* __restrict__ W, // c x d
  const size_t W_lda,          // lda (axis 1 stride) of W
@@ -33,20 +33,25 @@ float multinomial_loss
               1, X, X_lda, W, W_lda,
               0, XWT, XWT_lda);
 
-  const int length = n * XWT_lda;
-  vvexp2f(XWT, XWT, &length);
-
   float loss = 0;
+  unsigned int correct = 0;
 
   for (int i = 0; i < n; i++) {
-    float sum = 0;
-    for (int j = 0; j < c; j++)  {
-      sum += XWT[i * XWT_lda + j];
-    }
+    const int vvexp_len = c;
+    vvexp2f(&XWT[i * XWT_lda], &XWT[i * XWT_lda], &vvexp_len);
+
+    float sum = cblas_sasum(c, &XWT[i * XWT_lda], 1);
+    int max_idx = cblas_isamax(c, &XWT[i * XWT_lda], 1);
+
     loss -= log2f(XWT[i * XWT_lda + y[i]] / sum);
+    correct += max_idx == y[i];
   }
 
-  return loss;
+  loss_t ret;
+  ret.loss = loss / n;
+  ret.error = 1 - ((float)correct) / n;
+
+  return ret;
 }
 
 void multinomial_gradient
@@ -78,37 +83,4 @@ void multinomial_gradient
     float grad = -beta * ((y == j) - Wx[j] / sum);
     SAXPBY(d, grad, x, 1, (1 - beta), &G[j * WG_lda], 1);
   }
-}
-
-float multinomial_error
-(
- const float* __restrict__ W, // c x d
- const size_t W_lda,          // lda (axis 1 stride) of W
- const float* __restrict__ X, // n x d
- const size_t X_lda,          // lda (axis 1 stride) of X
- const char* __restrict__ y,  // n x 1
- const size_t n,              // num training samples
- const size_t d,              // data dimensionality
- const size_t c,              // num classes
- float* __restrict__ scratch  // scratch space
- ) {
-  float *XWT   /* n x c */ = scratch;
-  const size_t XWT_lda = c;
-
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-              n, c, d,
-              1, X, X_lda, W, W_lda,
-              0, XWT, XWT_lda);
-
-  const int length = n * XWT_lda;
-  vvexp2f(XWT, XWT, &length);
-
-  unsigned int correct = 0;
-
-  for (int i = 0; i < n; i++) {
-    int max_idx = cblas_isamax(c, &XWT[i * XWT_lda], 1);
-    correct += max_idx == y[i];
-  }
-
-  return 1 - (correct / ((float) n));
 }

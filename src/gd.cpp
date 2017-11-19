@@ -39,7 +39,7 @@ void sgd
   unsigned int n_outer_iter = (nlosses > 1) ? (nlosses - 1) : 1;
   unsigned int inner_count_per_outer = niter / n_outer_iter;
 
-  losses[0] = multinomial_loss
+  loss_t initial_loss = multinomial_loss
     (W,
      W_lda,
      X,
@@ -51,18 +51,10 @@ void sgd
      scratch
      );
 
+  losses[0] = initial_loss.loss;
+
   printf("Initial loss: %.1f, error: %.3f\n",
-         losses[0], multinomial_error
-         (W,
-          W_lda,
-          X,
-          X_lda,
-          ys,
-          n,
-          d,
-          c,
-          scratch
-          ));
+         initial_loss.loss, initial_loss.error);
 
   for (unsigned int outer_i = 0; outer_i < n_outer_iter; outer_i++) {
     unsigned int inner_niter;
@@ -80,19 +72,7 @@ void sgd
       multinomial_gradient(G, W, W_lda, x, y, d, c, beta, scratch);
       SAXPBY(c * W_lda, -alpha, G, 1, 1, W, 1);
     }
-    float loss = multinomial_loss
-      (W,
-       W_lda,
-       X,
-       X_lda,
-       ys,
-       n,
-       d,
-       c,
-       scratch
-       );
-
-    float error = multinomial_error
+    loss_t loss = multinomial_loss
       (W,
        W_lda,
        X,
@@ -105,9 +85,9 @@ void sgd
        );
 
     printf("Iter %d: ran for %d steps (loss: %.1f, error: %.3f)\n",
-           outer_i, inner_niter, loss, error);
+           outer_i, inner_niter, loss.loss, loss.error);
 
-    losses[outer_i + 1] = loss;
+    losses[outer_i + 1] = loss.loss;
 
   }
 

@@ -6,7 +6,12 @@ scratch_size
  size_t c
  );
 
-float multinomial_loss
+typedef struct loss_t {
+  float loss;
+  float error;
+} loss_t;
+
+loss_t multinomial_loss
 (
  const float* __restrict__ W, // c x d
  const size_t W_lda,          // lda (axis 1 stride) of W
@@ -29,18 +34,5 @@ void multinomial_gradient
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
  const float beta,            // momentum parameter
- float* __restrict__ scratch  // scratch space
- );
-
-float multinomial_error
-(
- const float* __restrict__ W, // c x d
- const size_t W_lda,          // lda (axis 1 stride) of W
- const float* __restrict__ X, // n x d
- const size_t X_lda,          // lda (axis 1 stride) of X
- const char* __restrict__ y,  // n x 1
- const size_t n,              // num training samples
- const size_t d,              // data dimensionality
- const size_t c,              // num classes
  float* __restrict__ scratch  // scratch space
  );

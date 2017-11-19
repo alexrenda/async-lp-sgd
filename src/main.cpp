@@ -67,8 +67,8 @@ int main() {
   const unsigned int d = train.dim;
   const unsigned int c = train.num_labels;
 
-  const unsigned int niter = 10000000;
-  const unsigned int nloss = 10001;
+  const unsigned int niter = 1000;
+  const unsigned int nloss = 11;
   float* __restrict__ W = (float*) malloc(sizeof(float) * c * d);
   float* __restrict__ losses = (float*) malloc(sizeof(float) * nloss);
 
