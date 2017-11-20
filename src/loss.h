@@ -17,20 +17,35 @@ loss_t multinomial_loss
  const size_t W_lda,          // lda (axis 1 stride) of W
  const float* __restrict__ X, // n x d
  const size_t X_lda,          // lda (axis 1 stride) of X
- const char* __restrict__ y,  // n x 1
- const size_t n,              // num training samples
+ const unsigned int* __restrict__ y,  // n x 1
+ const size_t n,              // num samples
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
  float* __restrict__ scratch  // scratch space
  );
 
-void multinomial_gradient
+void multinomial_gradient_single
 (
  float* __restrict__ G,       // c x d
  const float* __restrict__ W, // c x d
  const size_t WG_lda,         // lda (axis 1 stride) of W and G
- const float* __restrict__ x, // d x 1
- const char y,                // class
+ const float* __restrict__ x, // 1 x d
+ const unsigned int y,        // class
+ const size_t d,              // data dimensionality
+ const size_t c,              // num classes
+ const float beta,            // momentum parameter
+ float* __restrict__ scratch  // scratch space
+ );
+
+void multinomial_gradient_batch
+(
+ float* __restrict__ G,       // c x d
+ const float* __restrict__ W, // c x d
+ const size_t WG_lda,         // lda (axis 1 stride) of W and G
+ const float* __restrict__ X, // n x d
+ const size_t X_lda,          // lda (axis 1 stride) of X
+ const unsigned int * __restrict__ y, // class
+ const size_t n,              // number of samples
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
  const float beta,            // momentum parameter

@@ -31,7 +31,7 @@ int main() {
 
 
   float *xs = (float*) malloc(sizeof(float) * n * d);
-  char *ys = (char*) malloc(sizeof(char) * n);
+  unsigned int *ys = (unsigned int*) malloc(sizeof(unsigned int) * n);
 
   for (int i = 0; i < n; i++) {
     for (int j = 0; j < d; j++) {
@@ -62,17 +62,17 @@ int main() {
   dataset_t test = get_train_dataset();
   assert(train.dim == test.dim);
   float *xs = train.image.data();
-  char *ys = train.labels_idx.data();
+  unsigned int *ys = train.labels_idx.data();
   const unsigned int n = train.n;
   const unsigned int d = train.dim;
   const unsigned int c = train.num_labels;
 
-  const unsigned int niter = 1000;
-  const unsigned int nloss = 11;
+  const unsigned int niter = 10000;
+  const unsigned int nloss = 101;
   float* __restrict__ W = (float*) malloc(sizeof(float) * c * d);
   float* __restrict__ losses = (float*) malloc(sizeof(float) * nloss);
 
-  sgd(W, d, xs, d, ys, n, d, c, niter, 0.001, 0.99, 1234, losses, nloss);
+  sgd(W, d, xs, d, ys, n, d, c, niter, 0.001, 0.99, 16, 1234, losses, nloss);
 
   /*
   printf("w_final = ");
@@ -83,9 +83,9 @@ int main() {
     }
   }
   printf("]\n");
-  */
 
   for (unsigned int i = 0; i < nloss; i++) {
     printf("Loss: %f\n", losses[i]);
   }
+  */
 }

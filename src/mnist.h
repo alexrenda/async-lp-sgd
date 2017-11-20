@@ -8,7 +8,7 @@ struct dataset_t {
   const int dim;                // Dimensions of an image (28 * 28)
   const int num_labels;         // Number of labels (10)
   std::vector<float> labels_oh; // One-hot labels: byte[n][num_labels]
-  std::vector<char> labels_idx; // Index labels: byte[n]
+  std::vector<unsigned int> labels_idx; // Index labels: byte[n]
   std::vector<float> image;     // Images: byte[n][dim]
 
   dataset_t(int n, int dim, int num_labels)

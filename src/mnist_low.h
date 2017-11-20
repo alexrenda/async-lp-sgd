@@ -9,7 +9,7 @@ struct dataset_low_t {
   const int n;                  // Number
   const int dim;                // Dimensions of an image (28 * 28)
   const int num_labels;         // Number of labels (10)
-  std::vector<char> labels;     // Labels: byte[n][num_labels]
+  std::vector<unsigned int> labels;     // Labels: byte[n][num_labels]
   std::vector<char> image;      // Images: byte[n][dim]
 
   dataset_low_t(dataset_t dataset) :
