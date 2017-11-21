@@ -7,12 +7,9 @@ endif
 
 include Makefile.in.$(PLATFORM)
 
-# Possible flags to use later
-# -ffast-math -Ofast -fassociative-math -freciprocal-math \
-# -fno-signed-zeros -frename-registers -funroll-loops -fmodulo-sched \
-# -fmodulo-sched-allow-regmoves -ftree-vectorizen
-
-OPTFLAGS = -O3 -march=native -flax-vector-conversions
+OPTFLAGS = -ffast-math -fassociative-math -freciprocal-math -fno-signed-zeros \
+-Ofast -frename-registers -funroll-loops -fmodulo-sched \
+-fmodulo-sched-allow-regmoves -ftree-vectorize -march=native -flax-vector-conversions
 
 CFLAGS = -std=c++11 -fopenmp
 LDFLAGS = -fopenmp
