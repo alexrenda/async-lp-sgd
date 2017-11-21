@@ -111,6 +111,5 @@ void multinomial_gradient_batch
     SAXPBY(c, -1, &y_oh[i * ys_lda], 1, (1 / sum), Wx, 1);
     cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G_tmp, WG_lda);
   }
-
   SAXPBY(c * WG_lda, beta, G_tmp, 1, (1 - beta), G, 1);
 }

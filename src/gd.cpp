@@ -50,8 +50,8 @@ gd_losses_t sgd
 
   float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
   __assume_aligned(X_train, ALIGNMENT);
-  for (int k = 0; k < c; k++) {
-    memcpy(&X_train[k * X_lda], &X_train_in[k * d], d * sizeof(float));
+  for (int i = 0; i < n_train; i++) {
+    memcpy(&X_train[i * X_lda], &X_train_in[i * d], d * sizeof(float));
   }
   unsigned int* __restrict__ ys_idx_train = (unsigned int*) ALIGNED_MALLOC(n_train * sizeof(unsigned int));
   __assume_aligned(ys_idx_train, ALIGNMENT);
@@ -63,9 +63,8 @@ gd_losses_t sgd
   }
 
   float* __restrict__ X_test = (float*) ALIGNED_MALLOC(n_test * X_lda * sizeof(float));
-  __assume_aligned(X_test, ALIGNMENT);
-  for (int k = 0; k < c; k++) {
-    memcpy(&X_test[k * X_lda], &X_test_in[k * d], d * sizeof(float));
+  for (int i = 0; i < n_test; i++) {
+    memcpy(&X_test[i * X_lda], &X_test_in[i * d], d * sizeof(float));
   }
   unsigned int* __restrict__ ys_idx_test = (unsigned int*) ALIGNED_MALLOC(n_test * sizeof(unsigned int));
   __assume_aligned(ys_idx_test, ALIGNMENT);
@@ -205,10 +204,10 @@ gd_losses_t sgd
   printf("Final testing error: %f\n", losses.test_errors.back());
 #endif /* LOSSES */
 
-  free(G);
-  free(batch_idx);
-  free(batch_X);
-  free(batch_ys);
+  ALIGNED_FREE(G);
+  ALIGNED_FREE(batch_idx);
+  ALIGNED_FREE(batch_X);
+  ALIGNED_FREE(batch_ys);
 
   return losses;
 }

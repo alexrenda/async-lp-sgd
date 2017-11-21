@@ -8,11 +8,11 @@
 
 #ifdef __INTEL_COMPILER
 #  define ALIGNED_MALLOC(size) _mm_malloc(size, ALIGNMENT)
-#  define ALIGNED_FREE(ptr) do { _mm_free(ptr) } while(0)
+#  define ALIGNED_FREE(ptr) _mm_free(ptr)
 #else
 #  include <malloc.h>
 #  define ALIGNED_MALLOC(size) aligned_alloc(ALIGNMENT, size)
-#  define ALIGNED_FREE(ptr) do { free(ptr) } while(0)
+#  define ALIGNED_FREE(ptr) free(ptr)
 #endif /* __INTEL_COMPILER */
 
 #ifdef OSX_ACCELERATE
