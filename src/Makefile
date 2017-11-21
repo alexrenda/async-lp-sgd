@@ -12,8 +12,8 @@ OPTFLAGS = -ffast-math -fassociative-math -freciprocal-math -fno-signed-zeros \
 -fmodulo-sched-allow-regmoves -ftree-vectorize -march=native \
 -flax-vector-conversions
 
-CFLAGS = -std=c++11 -fopenmp
-LDFLAGS = -fopenmp
+CFLAGS = -std=c++11 -fopenmp -g
+LDFLAGS = -fopenmp -g
 
 SRC = $(shell find . -name "*.cpp")
 OBJ = $(SRC:.cpp=.o)

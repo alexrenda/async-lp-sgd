@@ -2,139 +2,133 @@
 #include <random>
 #include <functional>
 #include <vector>
-
-#include "loss.h"
-#include "mblas.h"
 #include "string.h"
-#include "timing.h"
 
-void sgd
+#include "gd.hpp"
+#include "loss.hpp"
+#include "mblas.hpp"
+#include "timing.hpp"
+
+#define PROGRESS
+
+gd_losses_t sgd
 (
- float* __restrict__ W,       // c x d
- const size_t W_lda,          // lda (axis 1 stride) of W
- const float* __restrict__ X, // n x d
- const size_t X_lda,          // lda (axis 1 stride) of X
- const unsigned int* __restrict__ ys,  // n x 1
- const float* __restrict__ ys_oh,  // n x 1
- const size_t ys_oh_lda,
- const size_t n,              // num training samples
- const size_t d,              // data dimensionality
- const size_t c,              // num classes
- const unsigned int niter,    // number of iterations to run
- const float alpha,           // step size
- const float beta,            // parameter of momentum
- const float lambda,          // regularization parameter
- const size_t batch_size,     // parameter of momentum
- const unsigned int seed,     // random seed
- float* __restrict losses,    // intermediate losses
- const size_t nlosses         // how many intermediate losses to write (2 <= nlosses <= niter)
+ float* __restrict__ W,             // c x d
+ const size_t W_lda,                // lda (axis 1 stride) of W
+ const size_t X_lda,                // lda (axis 1 stride) of X
+ const size_t ys_oh_lda,            // lda of ys
+ const float* __restrict__ X_train, // n x d
+ const unsigned int* __restrict__ ys_idx_train, // n x 1
+ const float* __restrict__ ys_oh_train,         // n x 1
+ const size_t n_train,                         // num training samples
+ const float* __restrict__ X_test,             // n x d
+ const unsigned int* __restrict__ ys_idx_test, // n x 1
+ const float* __restrict__ ys_oh_test,         // n x 1
+ const size_t n_test,                          // num training samples
+ const size_t d,                               // data dimensionality
+ const size_t c,                               // num classes
+ const unsigned int niter,      // number of iterations to run
+ const float alpha,             // step size
+ const float beta,              // parameter of momentum
+ const float lambda,            // regularization parameter
+ const size_t batch_size,       // parameter of momentum
+ const unsigned int seed        // random seed
  ) {
+  gd_losses_t losses;
+
+  // initialize randoms
   std::mt19937 gen(seed);
   std::normal_distribution<float> normal_dist(0, 1);
-  std::uniform_int_distribution<int> uniform_dist(0, n-1);
+  std::uniform_int_distribution<int> uniform_dist(0, n_train-1);
 
+  // gradient
   float* __restrict__ G = (float*) calloc(c * W_lda, sizeof(float));
-  float* __restrict__ scratch = (float*) malloc(scratch_size(n,d,c));
+  // tmp array for holding batch X
+  float *batch_X = (float*) malloc(sizeof(float) * batch_size * X_lda);
+  // tmp array for holding one-hot batch ys
+  float *batch_ys = (float*) malloc(sizeof(float) * batch_size * ys_oh_lda);
+  // vector used for fisher-yates-esque batch selection w/out replacement
+  unsigned int *batch_idx = (unsigned int*) malloc(sizeof(unsigned int) * n_train);
+  // collection of uniform distributions for batch selection
+  std::vector<std::uniform_int_distribution<int>> batch_dists;
+  // scratch space
+  float* __restrict__ scratch = (float*) malloc(scratch_size(n_train + n_test,d,c));
 
+  // initialize the batch selection vector (invariant is that it's an unordered set)
+  for (unsigned int i = 0; i < n_train; i++) {
+    batch_idx[i] = i;
+  }
+
+  // initialize each distribution (this is ugly... TODO: any better way?)
+  for (unsigned int i = 0; i < batch_size; i++) {
+    batch_dists.push_back(std::uniform_int_distribution<int>(0, n_train - i - 1));
+  }
+
+  // initialize weight vector
   for (unsigned int j = 0; j < c; j++) {
     for (unsigned int k = 0; k < d; k++) {
       W[j * W_lda + k] = normal_dist(gen);
     }
   }
 
-  // TODO: nlosses must be well formed
-  unsigned int n_outer_iter = (nlosses > 1) ? (nlosses - 1) : 1;
-  unsigned int inner_count_per_outer = niter / n_outer_iter;
+  loss_t loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
+                                 d, c, lambda, scratch);
+  losses.train_losses.push_back(loss.loss);
+  losses.train_errors.push_back(loss.error);
 
-  loss_t initial_loss = multinomial_loss
-    (W,
-     W_lda,
-     X,
-     X_lda,
-     ys,
-     n,
-     d,
-     c,
-     lambda,
-     scratch
-     );
-
-  losses[0] = initial_loss.loss;
-
-  printf("Initial loss: %.1f, error: %.3f\n",
-         initial_loss.loss, initial_loss.error);
+  loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
+                          d, c, lambda, scratch);
+  losses.test_losses.push_back(loss.loss);
+  losses.test_errors.push_back(loss.error);
 
   timing_t loss_timer = timing_t();
   timing_t grad_timer = timing_t();
 
-  unsigned int *batch_idx = (unsigned int*) malloc(sizeof(unsigned int) * n);
-  for (unsigned int i = 0; i < n; i++) {
-    batch_idx[i] = i;
-  }
+  printf("TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | TEST LOSS | TEST ERROR | WC TIME\n");
+  for (unsigned int iter = 0; iter < niter; iter++) {
+#ifdef PROGRESS
+    printf("%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, iter,
+           losses.train_losses.back(), losses.train_errors.back(),
+           losses.test_losses.back(), losses.test_errors.back(),
+           grad_timer.total_time() * 1000
+           );
+    fflush(stdout);
+    if (iter % (niter / 10) == 0) printf("\n");
+#endif /* PROGRESS */
 
-  std::vector<std::uniform_int_distribution<int>> batch_dists;
-  for (unsigned int i = 0; i < batch_size; i++) {
-    batch_dists.push_back(std::uniform_int_distribution<int>(0, n - i - 1));
-  }
+    grad_timer.start_timing_round();
+    for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
+      const int rand_idx = batch_dists[bidx](gen);
+      const int idx = batch_idx[rand_idx];
+      batch_idx[rand_idx] = batch_idx[n_train - 1 - bidx];
+      batch_idx[n_train - 1 - bidx] = idx;
 
-  float *batch_X = (float*) malloc(sizeof(float) * batch_size * X_lda);
-  float *batch_ys = (float*)
-    malloc(sizeof(float) * batch_size * ys_oh_lda);
-
-  for (unsigned int outer_i = 0; outer_i < n_outer_iter; outer_i++) {
-    unsigned int inner_niter;
-    if (outer_i == n_outer_iter - 1) {
-      inner_niter = niter - outer_i * inner_count_per_outer;
-    } else {
-      inner_niter = inner_count_per_outer;
+      memcpy(&batch_X[bidx * X_lda], &X_train[idx * X_lda], sizeof(float) * d);
+      memcpy(&batch_ys[bidx * ys_oh_lda],
+             &ys_oh_train[idx * ys_oh_lda], sizeof(float) * c);
     }
 
-    for (unsigned int iter = 0; iter < inner_niter; iter++) {
-      grad_timer.start_timing_round();
-      if (batch_size == 1) {
-        const int idx = uniform_dist(gen);
-        multinomial_gradient_single(G, W, W_lda, &X[idx * X_lda],
-                                    &ys_oh[idx * ys_oh_lda],
-                                    d, c, beta, lambda, scratch);
-      } else {
-        for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
-          const int rand_idx = batch_dists[bidx](gen);
-          const int idx = batch_idx[rand_idx];
-          batch_idx[rand_idx] = batch_idx[n - 1 - bidx];
-          batch_idx[n - 1 - bidx] = idx;
+    multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
+                               batch_ys, ys_oh_lda,
+                               batch_size, d, c, beta, lambda, scratch);
 
-          memcpy(&batch_X[bidx * X_lda], &X[idx * X_lda], sizeof(float) * d);
-          memcpy(&batch_ys[bidx * ys_oh_lda],
-                 &ys_oh[idx * ys_oh_lda], sizeof(float) * c);
-        }
-        multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
-                                   batch_ys, ys_oh_lda,
-                                   batch_size, d, c, beta, lambda, scratch);
-      }
-      grad_timer.end_timing_round(batch_size);
-      SAXPBY(c * W_lda, -alpha * batch_size, G, 1, 1, W, 1);
-    }
+    SAXPBY(c * W_lda, -alpha * batch_size, G, 1, 1, W, 1);
+
+    grad_timer.end_timing_round(batch_size);
 
     loss_timer.start_timing_round();
-    loss_t loss = multinomial_loss
-      (W,
-       W_lda,
-       X,
-       X_lda,
-       ys,
-       n,
-       d,
-       c,
-       lambda,
-       scratch
-       );
+
+    loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
+                            d, c, lambda, scratch);
+    losses.train_losses.push_back(loss.loss);
+    losses.train_errors.push_back(loss.error);
+
+    loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
+                            d, c, lambda, scratch);
+    losses.test_losses.push_back(loss.loss);
+    losses.test_errors.push_back(loss.error);
+
     loss_timer.end_timing_round(1);
-
-    printf("Iter %d: ran for %d steps (loss: %.1f, error: %.3f)\n",
-           outer_i, inner_niter, loss.loss, loss.error);
-
-    losses[outer_i + 1] = loss.loss;
-
   }
 
   printf("Grad time per step: %f\n", grad_timer.time_per_step());
@@ -144,4 +138,6 @@ void sgd
   free(batch_idx);
   free(batch_X);
   free(batch_ys);
+
+  return losses;
 }

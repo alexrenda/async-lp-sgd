@@ -1,6 +1,7 @@
-#include "mnist.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "mnist.hpp"
 
 #define NAME_TRAIN_FILE_IMAGE "../data/train-images-idx3-ubyte"
 #define NAME_TRAIN_FILE_LABEL "../data/train-labels-idx1-ubyte"

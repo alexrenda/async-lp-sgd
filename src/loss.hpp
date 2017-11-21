@@ -1,3 +1,6 @@
+#ifndef LOSS_H
+#define LOSS_H
+
 size_t
 scratch_size
 (
@@ -55,3 +58,5 @@ void multinomial_gradient_batch
  const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
  );
+
+#endif /* LOSS_H */

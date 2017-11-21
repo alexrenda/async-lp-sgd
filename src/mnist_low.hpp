@@ -3,7 +3,8 @@
 
 #include <vector>
 #include <cmath>
-#include "mnist.h"
+
+#include "mnist.hpp"
 
 struct dataset_low_t {
   const int n;                  // Number

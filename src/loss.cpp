@@ -1,8 +1,8 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "mblas.h"
-#include "loss.h"
+#include "mblas.hpp"
+#include "loss.hpp"
 
 #define CEIL_DIV(n, d) (((n) + (d) - 1) / (d))
 #define ALIGN_ABOVE(n) (CEIL_DIV(n, 16) * 16)

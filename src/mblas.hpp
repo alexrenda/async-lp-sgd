@@ -1,10 +1,13 @@
+#ifndef MBLAS_H
+#define MBLAS_H
+
 #ifdef OSX_ACCELERATE
 #  include <Accelerate/Accelerate.h>
 #elif defined(__GNUC__) || defined(__GNUG__)
 #  include <cblas.h>
 #else
-#  error you gotta have some blas cmon
-#endif
+#  error you gotta have some blas
+#endif /* OSX_ACCELERATE */
 
 #ifdef OSX_ACCELERATE
 #  define SAXPBY catlas_saxpby
@@ -17,4 +20,6 @@ void inline saxby(const int n, const float a, const float *x, const int incx, co
   }
 }
 #  define SAXPBY saxby
-#endif
+#endif /* OSX_ACCELERATE */
+
+#endif /* MBLAS_H */
