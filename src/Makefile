@@ -1,5 +1,9 @@
+HOSTNAME=$(shell hostname)
 OS=$(shell uname -s)
-ifeq ($(OS),Darwin)
+
+ifneq (,$(findstring totient,$(HOSTNAME)))
+	PLATFORM?=icc
+else ifeq ($(OS),Darwin)
 	PLATFORM?=mac
 else
 	PLATFORM?=gcc
