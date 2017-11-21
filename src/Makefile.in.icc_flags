@@ -1,0 +1,4 @@
+OPTFLAGS =
+
+CFLAGS = -std=c++11 -qopenmp
+LDFLAGS = -qopenmp

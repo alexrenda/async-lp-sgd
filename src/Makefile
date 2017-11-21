@@ -1,23 +1,19 @@
-HOSTNAME=$(shell hostname)
+ICC := $(shell command -v icc 2> /dev/null)
 OS=$(shell uname -s)
 
-ifneq (,$(findstring totient,$(HOSTNAME)))
+ifdef ICC
 	PLATFORM?=icc
+	FLAGFILE?=icc_flags
 else ifeq ($(OS),Darwin)
 	PLATFORM?=mac
+	FLAGFILE?=gcc_flags
 else
 	PLATFORM?=gcc
+	FLAGFILE?=gcc_flags
 endif
 
 include Makefile.in.$(PLATFORM)
-
-OPTFLAGS = -ffast-math -fassociative-math -freciprocal-math -fno-signed-zeros \
--Ofast -frename-registers -funroll-loops -fmodulo-sched \
--fmodulo-sched-allow-regmoves -ftree-vectorize -march=native \
--flax-vector-conversions
-
-CFLAGS = -std=c++11 -fopenmp -g
-LDFLAGS = -fopenmp -g
+include Makefile.in.$(FLAGFILE)
 
 SRC = $(shell find . -name "*.cpp")
 OBJ = $(SRC:.cpp=.o)

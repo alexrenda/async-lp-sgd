@@ -1,0 +1,6 @@
+CC=icc
+LD=$(CC)
+
+# Change local BLAS file locations
+LIBBLAS=-mkl
+INCBLAS=-mkl
