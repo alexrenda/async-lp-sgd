@@ -84,8 +84,12 @@ gd_losses_t sgd
   timing_t loss_timer = timing_t();
   timing_t grad_timer = timing_t();
 
+#ifdef PROGRESS
   printf("TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | TEST LOSS | TEST ERROR | WC TIME\n");
+#endif /* PROGRESS */
+
   for (unsigned int iter = 0; iter < niter; iter++) {
+
 #ifdef PROGRESS
     printf("%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, iter,
            losses.train_losses.back(), losses.train_errors.back(),
