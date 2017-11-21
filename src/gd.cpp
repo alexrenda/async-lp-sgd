@@ -51,7 +51,7 @@ gd_losses_t sgd
   // vector used for fisher-yates-esque batch selection w/out replacement
   unsigned int *batch_idx = (unsigned int*) malloc(sizeof(unsigned int) * n_train);
   // collection of uniform distributions for batch selection
-  std::vector<std::uniform_int_distribution<int>> batch_dists;
+  std::vector< std::uniform_int_distribution<int> > batch_dists;
   // scratch space
   float* __restrict__ scratch = (float*) malloc(scratch_size(n_train + n_test,d,c));
 
