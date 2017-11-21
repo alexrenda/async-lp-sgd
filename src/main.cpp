@@ -15,7 +15,7 @@ int main() {
   std::normal_distribution<float> normal_dist(0, 1);
 
   dataset_t train = get_train_dataset();
-  dataset_t test = get_train_dataset();
+  dataset_t test = get_test_dataset();
   assert(train.dim == test.dim);
   assert(train.num_labels == test.num_labels);
 
