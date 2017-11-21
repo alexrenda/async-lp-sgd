@@ -9,7 +9,6 @@
 #include "mnist.hpp"
 #include "gd.hpp"
 
-
 int main() {
   std::mt19937 gen(5);
   std::normal_distribution<float> normal_dist(0, 1);
@@ -32,10 +31,28 @@ int main() {
   unsigned int *ys_idx_test = test.labels_idx.data();
   float *ys_oh_test = test.labels_oh.data();
 
-  const unsigned int niter = 10000;
+  const unsigned int niter = 1000;
 
-  sgd(X_train, ys_idx_train, ys_oh_train, n_train,
-      X_test, ys_idx_test, ys_oh_test, n_test,
-      d, c, niter, 0.0001, 0.99, 1 / d,
-      16, 1234);
+  gd_losses_t losses = sgd(X_train, ys_idx_train, ys_oh_train, n_train,
+                      X_test, ys_idx_test, ys_oh_test, n_test,
+                      d, c, niter, 0.001, 0.99, 1 / d,
+                      16, 1234);
+
+  size_t n_losses = losses.times.size();
+
+  assert(losses.times.size() == n_losses);
+  assert(losses.train_losses.size() == n_losses);
+  assert(losses.train_errors.size() == n_losses);
+  assert(losses.test_losses.size() == n_losses);
+  assert(losses.test_errors.size() == n_losses);
+
+  for (unsigned int i = 0; i < n_losses; i++) {
+    printf("%f %f %f %f %f\n",
+           losses.times[i],
+           losses.train_losses[i],
+           losses.train_errors[i],
+           losses.test_losses[i],
+           losses.test_errors[i]
+           );
+  }
 }

@@ -114,6 +114,7 @@ gd_losses_t sgd
     }
   }
 
+  losses.times.push_back(0);
   loss_t loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
                                  d, c, lambda, scratch);
   losses.train_losses.push_back(loss.loss);
@@ -128,19 +129,20 @@ gd_losses_t sgd
   timing_t grad_timer = timing_t();
 
 #ifdef PROGRESS
-  printf("TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | TEST LOSS | TEST ERROR | WC TIME\n");
+  fprintf(stderr, "TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | TEST LOSS | TEST ERROR | WC TIME\n");
 #endif /* PROGRESS */
 
   for (unsigned int iter = 0; iter < niter; iter++) {
 
 #ifdef PROGRESS
-    printf("%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, iter,
+    fprintf(stderr,
+           "%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, iter,
            losses.train_losses.back(), losses.train_errors.back(),
            losses.test_losses.back(), losses.test_errors.back(),
            grad_timer.total_time()
            );
-    fflush(stdout);
-    if (iter % (niter / 10) == 0) printf("\n");
+    if (iter % (niter / 10) == 0) fprintf(stderr, "\n");
+    fflush(stderr);
 #endif /* PROGRESS */
 
     grad_timer.start_timing_round();
@@ -177,6 +179,8 @@ gd_losses_t sgd
     grad_timer.end_timing_round(batch_size);
 
 #ifdef LOSSES
+    losses.times.push_back(grad_timer.total_time());
+
     loss_timer.start_timing_round();
 
     loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
@@ -193,15 +197,19 @@ gd_losses_t sgd
 #endif /* LOSSES */
   }
 
-  printf("Grad time per step: %f\n", grad_timer.time_per_step());
-  printf("Loss time per step: %f\n", loss_timer.time_per_step());
+#ifdef PROGRESS
+  fprintf(stderr, "\n");
+#endif /* PROGRESS */
+
+  fprintf(stderr, "Grad time per step: %f\n", grad_timer.time_per_step());
+  fprintf(stderr, "Loss time per step: %f\n", loss_timer.time_per_step());
 
 #ifdef LOSSES
-  printf("Final training loss: %f\n", losses.train_losses.back());
-  printf("Final training error: %f\n", losses.train_errors.back());
+  fprintf(stderr, "Final training loss: %f\n", losses.train_losses.back());
+  fprintf(stderr, "Final training error: %f\n", losses.train_errors.back());
 
-  printf("Final testing loss: %f\n", losses.test_losses.back());
-  printf("Final testing error: %f\n", losses.test_errors.back());
+  fprintf(stderr, "Final testing loss: %f\n", losses.test_losses.back());
+  fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
 #endif /* LOSSES */
 
   ALIGNED_FREE(G);
