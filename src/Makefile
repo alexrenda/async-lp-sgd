@@ -12,7 +12,7 @@ include Makefile.in.$(PLATFORM)
 # -fno-signed-zeros -frename-registers -funroll-loops -fmodulo-sched \
 # -fmodulo-sched-allow-regmoves -ftree-vectorizen
 
-OPTFLAGS = -O3 -march=native
+OPTFLAGS = -O3 -march=native -flax-vector-conversions
 
 CFLAGS = -std=c++11 -fopenmp
 LDFLAGS = -fopenmp
