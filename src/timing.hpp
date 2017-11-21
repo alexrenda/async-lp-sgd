@@ -19,8 +19,8 @@ public:
   void end_timing_round(int _stepsTaken) {
     assert(_start_time >= 0);
 
-    _steps += _stepsTaken;
     _total_time += omp_get_wtime() - _start_time;
+    _steps += _stepsTaken;
     _start_time = -1;
   }
 
