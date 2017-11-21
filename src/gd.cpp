@@ -10,6 +10,7 @@
 #include "timing.hpp"
 
 #define PROGRESS
+#define LOSSES
 
 gd_losses_t sgd
 (
@@ -94,7 +95,7 @@ gd_losses_t sgd
     printf("%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, iter,
            losses.train_losses.back(), losses.train_errors.back(),
            losses.test_losses.back(), losses.test_errors.back(),
-           grad_timer.total_time() * 1000
+           grad_timer.total_time()
            );
     fflush(stdout);
     if (iter % (niter / 10) == 0) printf("\n");
@@ -120,6 +121,7 @@ gd_losses_t sgd
 
     grad_timer.end_timing_round(batch_size);
 
+#ifdef LOSSES
     loss_timer.start_timing_round();
 
     loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
@@ -133,10 +135,19 @@ gd_losses_t sgd
     losses.test_errors.push_back(loss.error);
 
     loss_timer.end_timing_round(1);
+#endif /* LOSSES */
   }
 
   printf("Grad time per step: %f\n", grad_timer.time_per_step());
   printf("Loss time per step: %f\n", loss_timer.time_per_step());
+
+#ifdef LOSSES
+  printf("Final training loss: %f\n", losses.train_losses.back());
+  printf("Final training error: %f\n", losses.train_errors.back());
+
+  printf("Final testing loss: %f\n", losses.test_losses.back());
+  printf("Final testing error: %f\n", losses.test_errors.back());
+#endif /* LOSSES */
 
   free(G);
   free(batch_idx);
