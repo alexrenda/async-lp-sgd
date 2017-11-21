@@ -33,10 +33,8 @@ int main() {
   float *ys_oh_test = test.labels_oh.data();
 
   const unsigned int niter = 100;
-  float* __restrict__ W = (float*) malloc(sizeof(float) * c * d);
 
-  sgd(W, d, d, c,
-      X_train, ys_idx_train, ys_oh_train, n_train,
+  sgd(X_train, ys_idx_train, ys_oh_train, n_train,
       X_test, ys_idx_test, ys_oh_test, n_test,
       d, c, niter, 0.001, 0.99, 1 / d,
       16, 1234);

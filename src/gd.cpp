@@ -14,20 +14,16 @@
 
 gd_losses_t sgd
 (
- float* __restrict__ W,             // c x d
- const size_t W_lda,                // lda (axis 1 stride) of W
- const size_t X_lda,                // lda (axis 1 stride) of X
- const size_t ys_oh_lda,            // lda of ys
- const float* __restrict__ X_train, // n x d
- const unsigned int* __restrict__ ys_idx_train, // n x 1
- const float* __restrict__ ys_oh_train,         // n x 1
- const size_t n_train,                         // num training samples
- const float* __restrict__ X_test,             // n x d
- const unsigned int* __restrict__ ys_idx_test, // n x 1
- const float* __restrict__ ys_oh_test,         // n x 1
- const size_t n_test,                          // num training samples
- const size_t d,                               // data dimensionality
- const size_t c,                               // num classes
+ const float* __restrict__ X_train_in,             // n x d
+ const unsigned int* __restrict__ ys_idx_train_in, // n x 1
+ const float* __restrict__ ys_oh_train_in,         // n x 1
+ const size_t n_train,                // num training samples
+ const float* __restrict__ X_test_in, // n x d
+ const unsigned int* __restrict__ ys_idx_test_in, // n x 1
+ const float* __restrict__ ys_oh_test_in,         // n x 1
+ const size_t n_test,           // num training samples
+ const size_t d,                // data dimensionality
+ const size_t c,                // num classes
  const unsigned int niter,      // number of iterations to run
  const float alpha,             // step size
  const float beta,              // parameter of momentum
@@ -40,20 +36,67 @@ gd_losses_t sgd
   // initialize randoms
   std::mt19937 gen(seed);
   std::normal_distribution<float> normal_dist(0, 1);
-  std::uniform_int_distribution<int> uniform_dist(0, n_train-1);
+  std::uniform_int_distribution<unsigned int> uniform_dist(0, n_train-1);
+
+  const size_t W_lda = ALIGN_ABOVE(d);
+  __assume(W_lda % ALIGNMENT == 0);
+  const size_t X_lda = ALIGN_ABOVE(d);
+  __assume(X_lda % ALIGNMENT == 0);
+  const size_t ys_oh_lda = ALIGN_ABOVE(c);
+  __assume(ys_oh_lda % ALIGNMENT == 0);
+
+  float* __restrict__ W = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
+  __assume_aligned(W, ALIGNMENT);
+
+  float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
+  __assume_aligned(X_train, ALIGNMENT);
+  for (int k = 0; k < c; k++) {
+    memcpy(&X_train[k * X_lda], &X_train_in[k * d], d * sizeof(float));
+  }
+  unsigned int* __restrict__ ys_idx_train = (unsigned int*) ALIGNED_MALLOC(n_train * sizeof(unsigned int));
+  __assume_aligned(ys_idx_train, ALIGNMENT);
+  memcpy(ys_idx_train, ys_idx_train_in, n_train * sizeof(unsigned int));
+  float* __restrict__ ys_oh_train = (float*) ALIGNED_MALLOC(n_train * ys_oh_lda * sizeof(float));
+  __assume_aligned(ys_oh_train, ALIGNMENT);
+  for (int i = 0; i < n_train; i++) {
+    memcpy(&ys_oh_train[i * ys_oh_lda], &ys_oh_train_in[i * c], c * sizeof(float));
+  }
+
+  float* __restrict__ X_test = (float*) ALIGNED_MALLOC(n_test * X_lda * sizeof(float));
+  __assume_aligned(X_test, ALIGNMENT);
+  for (int k = 0; k < c; k++) {
+    memcpy(&X_test[k * X_lda], &X_test_in[k * d], d * sizeof(float));
+  }
+  unsigned int* __restrict__ ys_idx_test = (unsigned int*) ALIGNED_MALLOC(n_test * sizeof(unsigned int));
+  __assume_aligned(ys_idx_test, ALIGNMENT);
+  memcpy(ys_idx_test, ys_idx_test_in, n_test * sizeof(unsigned int));
+  float* __restrict__ ys_oh_test = (float*) ALIGNED_MALLOC(n_test * ys_oh_lda * sizeof(float));
+  __assume_aligned(ys_oh_test, ALIGNMENT);
+  for (int i = 0; i < n_test; i++) {
+    memcpy(&ys_oh_test[i * ys_oh_lda], &ys_oh_test_in[i * c], c * sizeof(float));
+  }
+
 
   // gradient
-  float* __restrict__ G = (float*) calloc(c * W_lda, sizeof(float));
+  float* __restrict__ G = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
+  __assume_aligned(G, ALIGNMENT);
+  memset(G, 0, c * W_lda * sizeof(float));
+
   // tmp array for holding batch X
-  float *batch_X = (float*) malloc(sizeof(float) * batch_size * X_lda);
+  float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
+  __assume_aligned(batch_X, ALIGNMENT);
   // tmp array for holding one-hot batch ys
-  float *batch_ys = (float*) malloc(sizeof(float) * batch_size * ys_oh_lda);
+  float *batch_ys = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * ys_oh_lda);
+  __assume_aligned(batch_ys, ALIGNMENT);
   // vector used for fisher-yates-esque batch selection w/out replacement
   unsigned int *batch_idx = (unsigned int*) malloc(sizeof(unsigned int) * n_train);
+  __assume_aligned(batch_idx, ALIGNMENT);
+
   // collection of uniform distributions for batch selection
-  std::vector< std::uniform_int_distribution<int> > batch_dists;
+  std::vector< std::uniform_int_distribution<unsigned int> > batch_dists;
   // scratch space
-  float* __restrict__ scratch = (float*) malloc(scratch_size(n_train + n_test,d,c));
+  float* __restrict__ scratch = (float*) ALIGNED_MALLOC(scratch_size(n_train + n_test,d,c));
+  __assume_aligned(scratch, ALIGNMENT);
 
   // initialize the batch selection vector (invariant is that it's an unordered set)
   for (unsigned int i = 0; i < n_train; i++) {
@@ -62,7 +105,7 @@ gd_losses_t sgd
 
   // initialize each distribution (this is ugly... TODO: any better way?)
   for (unsigned int i = 0; i < batch_size; i++) {
-    batch_dists.push_back(std::uniform_int_distribution<int>(0, n_train - i - 1));
+    batch_dists.push_back(std::uniform_int_distribution<unsigned int>(0, n_train - i - 1));
   }
 
   // initialize weight vector
@@ -102,15 +145,28 @@ gd_losses_t sgd
 #endif /* PROGRESS */
 
     grad_timer.start_timing_round();
+
     for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
-      const int rand_idx = batch_dists[bidx](gen);
-      const int idx = batch_idx[rand_idx];
+      const unsigned int rand_idx = batch_dists[bidx](gen);
+      const unsigned int idx = batch_idx[rand_idx];
       batch_idx[rand_idx] = batch_idx[n_train - 1 - bidx];
       batch_idx[n_train - 1 - bidx] = idx;
 
-      memcpy(&batch_X[bidx * X_lda], &X_train[idx * X_lda], sizeof(float) * d);
-      memcpy(&batch_ys[bidx * ys_oh_lda],
-             &ys_oh_train[idx * ys_oh_lda], sizeof(float) * c);
+      float *x_dst = &batch_X[bidx * X_lda];
+      const float *x_src = &X_train[idx * X_lda];
+
+#pragma vector aligned
+      for (unsigned int j = 0; j < d; j++) {
+        x_dst[j] = x_src[j];
+      }
+
+      float *ys_dst = &batch_ys[bidx * ys_oh_lda];
+      const float *ys_src = &ys_oh_train[idx * ys_oh_lda];
+
+#pragma vector aligned
+      for (unsigned int k = 0; k < c; k++) {
+        ys_dst[k] = ys_src[k];
+      }
     }
 
     multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,

@@ -1,6 +1,20 @@
 #ifndef MBLAS_H
 #define MBLAS_H
 
+#define ALIGNMENT 16
+
+#define CEIL_DIV(n, d) (((n) + (d) - 1) / (d))
+#define ALIGN_ABOVE(n) (CEIL_DIV(n, ALIGNMENT) * ALIGNMENT)
+
+#ifdef __INTEL_COMPILER
+#  define ALIGNED_MALLOC(size) _mm_malloc(size, ALIGNMENT)
+#  define ALIGNED_FREE(ptr) do { _mm_free(ptr) } while(0)
+#else
+#  include <malloc.h>
+#  define ALIGNED_MALLOC(size) aligned_alloc(ALIGNMENT, size)
+#  define ALIGNED_FREE(ptr) do { free(ptr) } while(0)
+#endif /* __INTEL_COMPILER */
+
 #ifdef OSX_ACCELERATE
 #  include <Accelerate/Accelerate.h>
 #elif defined(__INTEL_COMPILER)
