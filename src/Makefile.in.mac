@@ -1,4 +1,9 @@
-CC=g++
+USER=$(shell whoami)
+ifeq ($(USER),alex)
+	CC=/usr/local/Cellar/gcc@5/5.5.0/bin/g++-5
+else
+	CC=g++
+endif
 LD=$(CC)
 
 LIBBLAS = -framework Accelerate
