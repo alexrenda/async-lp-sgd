@@ -62,7 +62,8 @@ int main() {
   dataset_t test = get_train_dataset();
   assert(train.dim == test.dim);
   float *xs = train.image.data();
-  unsigned int *ys = train.labels_idx.data();
+  unsigned int *ys_idx = train.labels_idx.data();
+  float *ys_oh = train.labels_oh.data();
   const unsigned int n = train.n;
   const unsigned int d = train.dim;
   const unsigned int c = train.num_labels;
@@ -72,7 +73,8 @@ int main() {
   float* __restrict__ W = (float*) malloc(sizeof(float) * c * d);
   float* __restrict__ losses = (float*) malloc(sizeof(float) * nloss);
 
-  sgd(W, d, xs, d, ys, n, d, c, niter, 0.001, 0.99, 16, 1234, losses, nloss);
+  sgd(W, d, xs, d, ys_idx, ys_oh, c, n, d, c, niter, 0.001, 0.99, 1 / n,
+      16, 1234, losses, nloss);
 
   /*
   printf("w_final = ");

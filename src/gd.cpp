@@ -15,12 +15,15 @@ void sgd
  const float* __restrict__ X, // n x d
  const size_t X_lda,          // lda (axis 1 stride) of X
  const unsigned int* __restrict__ ys,  // n x 1
+ const float* __restrict__ ys_oh,  // n x 1
+ const size_t ys_oh_lda,
  const size_t n,              // num training samples
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
  const unsigned int niter,    // number of iterations to run
  const float alpha,           // step size
  const float beta,            // parameter of momentum
+ const float lambda,          // regularization parameter
  const size_t batch_size,     // parameter of momentum
  const unsigned int seed,     // random seed
  float* __restrict losses,    // intermediate losses
@@ -52,6 +55,7 @@ void sgd
      n,
      d,
      c,
+     lambda,
      scratch
      );
 
@@ -63,19 +67,19 @@ void sgd
   timing_t loss_timer = timing_t();
   timing_t grad_timer = timing_t();
 
-
   unsigned int *batch_idx = (unsigned int*) malloc(sizeof(unsigned int) * n);
-  for (int i = 0; i < n; i++) {
+  for (unsigned int i = 0; i < n; i++) {
     batch_idx[i] = i;
   }
 
   std::vector<std::uniform_int_distribution<int>> batch_dists;
-  for (int i = 0; i < batch_size; i++) {
+  for (unsigned int i = 0; i < batch_size; i++) {
     batch_dists.push_back(std::uniform_int_distribution<int>(0, n - i - 1));
   }
 
   float *batch_X = (float*) malloc(sizeof(float) * batch_size * X_lda);
-  unsigned int *batch_ys = (unsigned int*) malloc(sizeof(unsigned int) * batch_size);
+  float *batch_ys = (float*)
+    malloc(sizeof(float) * batch_size * ys_oh_lda);
 
   for (unsigned int outer_i = 0; outer_i < n_outer_iter; outer_i++) {
     unsigned int inner_niter;
@@ -89,8 +93,9 @@ void sgd
       grad_timer.start_timing_round();
       if (batch_size == 1) {
         const int idx = uniform_dist(gen);
-        multinomial_gradient_batch(G, W, W_lda, &X[idx * X_lda], X_lda,
-                                   &ys[idx], 4, d, c, beta, scratch);
+        multinomial_gradient_single(G, W, W_lda, &X[idx * X_lda],
+                                    &ys_oh[idx * ys_oh_lda],
+                                    d, c, beta, lambda, scratch);
       } else {
         for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
           const int rand_idx = batch_dists[bidx](gen);
@@ -99,10 +104,12 @@ void sgd
           batch_idx[n - 1 - bidx] = idx;
 
           memcpy(&batch_X[bidx * X_lda], &X[idx * X_lda], sizeof(float) * d);
-          batch_ys[bidx] = ys[idx];
+          memcpy(&batch_ys[bidx * ys_oh_lda],
+                 &ys_oh[idx * ys_oh_lda], sizeof(float) * c);
         }
-        multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda, batch_ys,
-                                   batch_size, d, c, beta, scratch);
+        multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
+                                   batch_ys, ys_oh_lda,
+                                   batch_size, d, c, beta, lambda, scratch);
       }
       grad_timer.end_timing_round(batch_size);
       SAXPBY(c * W_lda, -alpha * batch_size, G, 1, 1, W, 1);
@@ -118,6 +125,7 @@ void sgd
        n,
        d,
        c,
+       lambda,
        scratch
        );
     loss_timer.end_timing_round(1);

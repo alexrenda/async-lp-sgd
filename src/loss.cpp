@@ -27,6 +27,7 @@ loss_t multinomial_loss
  const size_t n,              // num training samples
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
+ const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
  ) {
   float *XWT   /* n x c */ = scratch;
@@ -64,13 +65,16 @@ void multinomial_gradient_single
  const float* __restrict__ W, // c x d
  const size_t WG_lda,         // lda (axis 1 stride) of W and G
  const float* __restrict__ x, // d x 1
- const unsigned int y,        // class
+ const float* y_oh,           // c x 1
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
  const float beta,            // momentum parameter
+ const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
  ) {
   float *Wx   /* c x 1 */ = scratch;
+  float *G_tmp   /* c x d */ = Wx + c;
+  memset(G_tmp, 0, sizeof(float) * c * WG_lda);
 
   cblas_sgemv(CblasRowMajor, CblasNoTrans,
               c, d,
@@ -79,13 +83,14 @@ void multinomial_gradient_single
 
   const int length = c;
   vvexp2f(Wx, Wx, &length);
+
   float sum = cblas_sasum(c, Wx, 1);
 
-  // this is a rank 1 update?
+  SAXPBY(c, -1, y_oh, 1, (1 / sum), Wx, 1);
+  cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G_tmp, WG_lda);
 
-  for (unsigned int j = 0; j < c; j++) {
-    float grad = -beta * ((y == j) - Wx[j] / sum);
-    SAXPBY(d, grad, x, 1, (1 - beta), &G[j * WG_lda], 1);
+  for (unsigned int i = 0; i < c; i++) {
+    SAXPBY(d, beta, &G_tmp[i * WG_lda], 1, (1 - beta), &G[i * WG_lda], 1);
   }
 }
 
@@ -96,11 +101,13 @@ void multinomial_gradient_batch
  const size_t WG_lda,         // lda (axis 1 stride) of W and G
  const float* __restrict__ X, // n x d data
  const size_t X_lda,          // lda (axis 1 stride) of X
- const unsigned int* __restrict__ y,  // n x 1 classes
+ const float* __restrict__ y_oh,  // n x 1 classes
+ const size_t ys_lda,
  const size_t n,              // number of losses
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
  const float beta,            // momentum parameter
+ const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
  ) {
   float *XWT   /* n x c */ = scratch;
@@ -123,11 +130,8 @@ void multinomial_gradient_batch
 
     float sum = cblas_sasum(c, Wx, 1);
 
-    // this is a rank 1 update?
-    for (unsigned int j = 0; j < c; j++) {
-      float grad = -beta * ((y[i] == j) - Wx[j] / sum);
-      SAXPBY(d, grad, x, 1, (1 - beta), &G_tmp[j * WG_lda], 1);
-    }
+    SAXPBY(c, -1, &y_oh[i * ys_lda], 1, (1 / sum), Wx, 1);
+    cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G_tmp, WG_lda);
   }
 
   SAXPBY(c * WG_lda, beta, G_tmp, 1, (1 - beta), G, 1);
