@@ -42,13 +42,21 @@ loss_t multinomial_loss
   unsigned int correct = 0;
 
   for (unsigned int i = 0; i < n; i++) {
-    const int vvexp_len = c;
-    vvexp2f(&XWT[i * XWT_lda], &XWT[i * XWT_lda], &vvexp_len);
+    float sum = 0;
+    unsigned int max_idx = -1;
+    float max_val = -1;
 
-    float sum = cblas_sasum(c, &XWT[i * XWT_lda], 1);
-    unsigned int max_idx = cblas_isamax(c, &XWT[i * XWT_lda], 1);
+    for (unsigned int j = 0; j < c; j++) {
+      float curr = XWT[i * XWT_lda + j];
+      float exped = exp2f(curr);
+      if (exped > max_val) {
+        max_idx = j;
+        max_val = exped;
+      }
+      sum += exped;
+    }
 
-    loss -= log2f(XWT[i * XWT_lda + y[i]] / sum);
+    loss += log2f(sum) - XWT[i * XWT_lda + y[i]];
     correct += max_idx == y[i];
   }
 
