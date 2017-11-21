@@ -3,6 +3,9 @@
 
 #ifdef OSX_ACCELERATE
 #  include <Accelerate/Accelerate.h>
+#elif defined(__INTEL_COMPILER)
+#  include <mkl_cblas.h>
+#  include <mkl.h>
 #elif defined(__GNUC__) || defined(__GNUG__)
 #  include <cblas.h>
 #else
@@ -11,6 +14,8 @@
 
 #ifdef OSX_ACCELERATE
 #  define SAXPBY catlas_saxpby
+#elif defined(__INTEL_COMPILER)
+#  define SAXPBY cblas_saxpby
 #else
 void inline saxby(const int n, const float a, const float *x, const int incx, const float b, float *y, const int incy){
   int xa = 0;

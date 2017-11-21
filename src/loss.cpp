@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "mblas.hpp"
 #include "loss.hpp"
@@ -48,7 +49,7 @@ loss_t multinomial_loss
 
     for (unsigned int j = 0; j < c; j++) {
       float curr = XWT[i * XWT_lda + j];
-      float exped = exp2f(curr);
+      float exped = expf(curr);
       if (exped > max_val) {
         max_idx = j;
         max_val = exped;
@@ -56,7 +57,7 @@ loss_t multinomial_loss
       sum += exped;
     }
 
-    loss += log2f(sum) - XWT[i * XWT_lda + y[i]];
+    loss += logf(sum) - XWT[i * XWT_lda + y[i]];
     correct += max_idx == y[i];
   }
 
@@ -89,8 +90,7 @@ void multinomial_gradient_single
               1, W, WG_lda, x, 1,
               0, Wx, 1);
 
-  const int length = c;
-  vvexp2f(Wx, Wx, &length);
+  vsExp(c, Wx, Wx);
 
   float sum = cblas_sasum(c, Wx, 1);
 
@@ -133,8 +133,7 @@ void multinomial_gradient_batch
     float *Wx = &XWT[i * XWT_lda];
     const float *x = &X[i * X_lda];
 
-    const int length = c;
-    vvexp2f(Wx, Wx, &length);
+    vsExp(c, Wx, Wx);
 
     float sum = cblas_sasum(c, Wx, 1);
 
