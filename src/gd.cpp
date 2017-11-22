@@ -164,7 +164,9 @@ gd_losses_t sgd
               losses.test_losses.back(), losses.test_errors.back(),
               grad_timer.total_time()
               );
-      if (it % (niter / 10) == 0) fprintf(stderr, "\n");
+      if (it % (niter / 10) == 0) {
+        fprintf(stderr, "\n");
+      }
     }
     fflush(stderr);
 #endif /* PROGRESS */
