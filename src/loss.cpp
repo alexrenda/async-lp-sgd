@@ -12,7 +12,8 @@ scratch_size
  size_t d,
  size_t c
  ) {
-  return sizeof(float) * (ALIGN_ABOVE(n) * ALIGN_ABOVE(c) + ALIGN_ABOVE(d) * ALIGN_ABOVE(c));
+  return sizeof(float) * (ALIGN_ABOVE(n) * ALIGN_ABOVE(c) +
+                          ALIGN_ABOVE(c) * ALIGN_ABOVE(d));
 }
 
 loss_t multinomial_loss
