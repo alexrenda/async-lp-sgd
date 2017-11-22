@@ -33,10 +33,10 @@ gd_losses_t sgd
  const size_t batch_size,       // parameter of momentum
  const unsigned int seed        // random seed
  ) {
-#ifndef HOGWILD
-  omp_set_num_threads(1);
+#ifdef HOGWILD
+  omp_set_num_threads(16);
 #else
-  omp_set_num_threads(4);
+  omp_set_num_threads(1);
 #endif
 
   gd_losses_t losses;
@@ -47,10 +47,13 @@ gd_losses_t sgd
   std::uniform_int_distribution<unsigned int> uniform_dist(0, n_train-1);
 
   const size_t W_lda = ALIGN_ABOVE(d);
+  assert(W_lda % ALIGNMENT == 0);
   __assume(W_lda % ALIGNMENT == 0);
   const size_t X_lda = ALIGN_ABOVE(d);
+  assert(X_lda % ALIGNMENT == 0);
   __assume(X_lda % ALIGNMENT == 0);
   const size_t ys_oh_lda = ALIGN_ABOVE(c);
+  assert(ys_oh_lda % ALIGNMENT == 0);
   __assume(ys_oh_lda % ALIGNMENT == 0);
 
   float* __restrict__ W = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
@@ -105,7 +108,7 @@ gd_losses_t sgd
   // scratch space
   const size_t scratch_size_per_thread = scratch_size(n_train + n_test,d,c);
   assert(scratch_size_per_thread % ALIGNMENT == 0);
-  float* __restrict__ scratch_all = (float*) ALIGNED_MALLOC(scratch_size_per_thread * omp_get_max_threads());
+  float* __restrict__ scratch_all = (float*) ALIGNED_MALLOC(scratch_size_per_thread * omp_get_max_threads() * sizeof(float));
   __assume_aligned(scratch_all, ALIGNMENT);
 
   // initialize the batch selection vector (invariant is that it's an unordered set)
@@ -236,6 +239,14 @@ gd_losses_t sgd
   fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
 #endif /* LOSSES */
 
+  ALIGNED_FREE(W);
+  ALIGNED_FREE((float*) X_train);
+  ALIGNED_FREE((unsigned int*) ys_idx_train);
+  ALIGNED_FREE((float*) ys_oh_train);
+  ALIGNED_FREE((float*) X_test);
+  ALIGNED_FREE((unsigned int*) ys_idx_test);
+  ALIGNED_FREE((float*) ys_oh_test);
+  ALIGNED_FREE((float*) scratch_all);
   ALIGNED_FREE(G);
   ALIGNED_FREE(batch_idx);
   ALIGNED_FREE(batch_X);
