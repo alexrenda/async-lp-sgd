@@ -12,6 +12,8 @@
 #define PROGRESS
 #define LOSSES
 
+#define HOGWILD
+
 gd_losses_t sgd
 (
  const float* __restrict__ X_train_in,             // n x d
@@ -31,6 +33,12 @@ gd_losses_t sgd
  const size_t batch_size,       // parameter of momentum
  const unsigned int seed        // random seed
  ) {
+#ifndef HOGWILD
+  omp_set_num_threads(1);
+#else
+  omp_set_num_threads(4);
+#endif
+
   gd_losses_t losses;
 
   // initialize randoms
@@ -48,31 +56,32 @@ gd_losses_t sgd
   float* __restrict__ W = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
   __assume_aligned(W, ALIGNMENT);
 
-  float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
+  const float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
   __assume_aligned(X_train, ALIGNMENT);
   for (int i = 0; i < n_train; i++) {
-    memcpy(&X_train[i * X_lda], &X_train_in[i * d], d * sizeof(float));
+    memcpy((float*) &X_train[i * X_lda], &X_train_in[i * d], d * sizeof(float));
   }
-  unsigned int* __restrict__ ys_idx_train = (unsigned int*) ALIGNED_MALLOC(n_train * sizeof(unsigned int));
+  __assume_aligned(X_train, ALIGNMENT);
+  const unsigned int* __restrict__ ys_idx_train = (unsigned int*) ALIGNED_MALLOC(n_train * sizeof(unsigned int));
   __assume_aligned(ys_idx_train, ALIGNMENT);
-  memcpy(ys_idx_train, ys_idx_train_in, n_train * sizeof(unsigned int));
-  float* __restrict__ ys_oh_train = (float*) ALIGNED_MALLOC(n_train * ys_oh_lda * sizeof(float));
+  memcpy((unsigned int*) ys_idx_train, ys_idx_train_in, n_train * sizeof(unsigned int));
+  const float* __restrict__ ys_oh_train = (float*) ALIGNED_MALLOC(n_train * ys_oh_lda * sizeof(float));
   __assume_aligned(ys_oh_train, ALIGNMENT);
   for (int i = 0; i < n_train; i++) {
-    memcpy(&ys_oh_train[i * ys_oh_lda], &ys_oh_train_in[i * c], c * sizeof(float));
+    memcpy((float*) &ys_oh_train[i * ys_oh_lda], &ys_oh_train_in[i * c], c * sizeof(float));
   }
 
-  float* __restrict__ X_test = (float*) ALIGNED_MALLOC(n_test * X_lda * sizeof(float));
+  const float* __restrict__ X_test = (float*) ALIGNED_MALLOC(n_test * X_lda * sizeof(float));
   for (int i = 0; i < n_test; i++) {
-    memcpy(&X_test[i * X_lda], &X_test_in[i * d], d * sizeof(float));
+    memcpy((float*) &X_test[i * X_lda], &X_test_in[i * d], d * sizeof(float));
   }
-  unsigned int* __restrict__ ys_idx_test = (unsigned int*) ALIGNED_MALLOC(n_test * sizeof(unsigned int));
+  const unsigned int* __restrict__ ys_idx_test = (unsigned int*) ALIGNED_MALLOC(n_test * sizeof(unsigned int));
   __assume_aligned(ys_idx_test, ALIGNMENT);
-  memcpy(ys_idx_test, ys_idx_test_in, n_test * sizeof(unsigned int));
-  float* __restrict__ ys_oh_test = (float*) ALIGNED_MALLOC(n_test * ys_oh_lda * sizeof(float));
+  memcpy((unsigned int*) ys_idx_test, ys_idx_test_in, n_test * sizeof(unsigned int));
+  const float* __restrict__ ys_oh_test = (float*) ALIGNED_MALLOC(n_test * ys_oh_lda * sizeof(float));
   __assume_aligned(ys_oh_test, ALIGNMENT);
   for (int i = 0; i < n_test; i++) {
-    memcpy(&ys_oh_test[i * ys_oh_lda], &ys_oh_test_in[i * c], c * sizeof(float));
+    memcpy((float*) &ys_oh_test[i * ys_oh_lda], &ys_oh_test_in[i * c], c * sizeof(float));
   }
 
 
@@ -94,8 +103,10 @@ gd_losses_t sgd
   // collection of uniform distributions for batch selection
   std::vector< std::uniform_int_distribution<unsigned int> > batch_dists;
   // scratch space
-  float* __restrict__ scratch = (float*) ALIGNED_MALLOC(scratch_size(n_train + n_test,d,c));
-  __assume_aligned(scratch, ALIGNMENT);
+  const size_t scratch_size_per_thread = scratch_size(n_train + n_test,d,c);
+  assert(scratch_size_per_thread % ALIGNMENT == 0);
+  float* __restrict__ scratch_all = (float*) ALIGNED_MALLOC(scratch_size_per_thread * omp_get_max_threads());
+  __assume_aligned(scratch_all, ALIGNMENT);
 
   // initialize the batch selection vector (invariant is that it's an unordered set)
   for (unsigned int i = 0; i < n_train; i++) {
@@ -116,12 +127,12 @@ gd_losses_t sgd
 
   losses.times.push_back(0);
   loss_t loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                                 d, c, lambda, scratch);
+                                 d, c, lambda, scratch_all);
   losses.train_losses.push_back(loss.loss);
   losses.train_errors.push_back(loss.error);
 
   loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                          d, c, lambda, scratch);
+                          d, c, lambda, scratch_all);
   losses.test_losses.push_back(loss.loss);
   losses.test_errors.push_back(loss.error);
 
@@ -130,21 +141,32 @@ gd_losses_t sgd
 
 #ifdef PROGRESS
   fprintf(stderr, "TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | TEST LOSS | TEST ERROR | WC TIME\n");
+  fflush(stderr);
 #endif /* PROGRESS */
 
-  for (unsigned int iter = 0; iter < niter; iter++) {
+#pragma omp parallel for
+  for (unsigned int _iter = 0; _iter < niter; _iter++) {
+    unsigned int tno = omp_get_thread_num();
+    float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
+    __assume_aligned(scratch, ALIGNMENT);
 
 #ifdef PROGRESS
-    fprintf(stderr,
-           "%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, iter,
-           losses.train_losses.back(), losses.train_errors.back(),
-           losses.test_losses.back(), losses.test_errors.back(),
-           grad_timer.total_time()
-           );
-    if (iter % (niter / 10) == 0) fprintf(stderr, "\n");
+#pragma omp critical
+    {
+      unsigned int it = losses.times.size();
+
+      fprintf(stderr,
+              "%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, it,
+              losses.train_losses.back(), losses.train_errors.back(),
+              losses.test_losses.back(), losses.test_errors.back(),
+              grad_timer.total_time()
+              );
+      if (it % (niter / 10) == 0) fprintf(stderr, "\n");
+    }
     fflush(stderr);
 #endif /* PROGRESS */
 
+#pragma omp critical
     grad_timer.start_timing_round();
 
     for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
@@ -176,24 +198,26 @@ gd_losses_t sgd
 
     SAXPBY(c * W_lda, -alpha * batch_size, G, 1, 1, W, 1);
 
+#pragma omp critical
     grad_timer.end_timing_round(batch_size);
 
 #ifdef LOSSES
-    losses.times.push_back(grad_timer.total_time());
-
     loss_timer.start_timing_round();
-
-    loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                            d, c, lambda, scratch);
-    losses.train_losses.push_back(loss.loss);
-    losses.train_errors.push_back(loss.error);
-
-    loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                            d, c, lambda, scratch);
-    losses.test_losses.push_back(loss.loss);
-    losses.test_errors.push_back(loss.error);
-
+    loss_t train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train,
+                                         n_train, d, c, lambda, scratch);
+    loss_t test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test,
+                                        n_test, d, c, lambda, scratch);
     loss_timer.end_timing_round(1);
+
+#pragma omp critical
+    {
+      losses.times.push_back(grad_timer.total_time());
+      losses.train_losses.push_back(train_loss.loss);
+      losses.train_errors.push_back(train_loss.error);
+      losses.test_losses.push_back(test_loss.loss);
+      losses.test_errors.push_back(test_loss.error);
+    }
+
 #endif /* LOSSES */
   }
 
