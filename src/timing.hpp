@@ -7,7 +7,7 @@
 
 class timing_t {
   double _total_time;
-  int _steps;
+  std::atomic<int> _steps;
   double _start_time;
   std::atomic<unsigned int> _entrants;
 
@@ -24,10 +24,10 @@ public:
   void end_timing_round(int _stepsTaken) {
     assert(_entrants > 0);
     unsigned int m_entrants = --_entrants;
+    _steps += _stepsTaken;
 
     if (m_entrants == 0) {
       _total_time += omp_get_wtime() - _start_time;
-      _steps += _stepsTaken;
       _start_time = -1;
     }
   }
