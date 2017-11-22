@@ -89,9 +89,9 @@ gd_losses_t sgd
 
 
   // gradient
-  float* __restrict__ G = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
-  __assume_aligned(G, ALIGNMENT);
-  memset(G, 0, c * W_lda * sizeof(float));
+  float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
+  __assume_aligned(G_all, ALIGNMENT);
+  memset(G_all, 0, c * W_lda * omp_get_max_threads() * sizeof(float));
 
   // tmp array for holding batch X
   float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
@@ -152,6 +152,9 @@ gd_losses_t sgd
     unsigned int tno = omp_get_thread_num();
     float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
     __assume_aligned(scratch, ALIGNMENT);
+
+    float* __restrict__ G = &G_all[c * W_lda * tno];
+    __assume_aligned(G, ALIGNMENT);
 
 #ifdef PROGRESS
 #pragma omp critical
@@ -249,7 +252,7 @@ gd_losses_t sgd
   ALIGNED_FREE((unsigned int*) ys_idx_test);
   ALIGNED_FREE((float*) ys_oh_test);
   ALIGNED_FREE((float*) scratch_all);
-  ALIGNED_FREE(G);
+  ALIGNED_FREE(G_all);
   ALIGNED_FREE(batch_idx);
   ALIGNED_FREE(batch_X);
   ALIGNED_FREE(batch_ys);
