@@ -26,6 +26,7 @@ loss_t multinomial_loss
  const size_t n,              // num training samples
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
+ const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
  ) {
   float *XWT   /* n x c */ = scratch;
@@ -77,18 +78,23 @@ void multinomial_gradient_batch
  const size_t n,              // number of losses
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
+ const float beta,            // momentum parameter
+ const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
  ) {
   float *XWT   /* n x c */ = scratch;
   const size_t XWT_lda = ALIGN_ABOVE(c);
 
+  float *G_tmp   /* c x d */ = XWT + n * XWT_lda;
+
   __assume_aligned(XWT, ALIGNMENT);
   __assume_aligned(G, ALIGNMENT);
+  __assume_aligned(G_tmp, ALIGNMENT);
   __assume_aligned(W, ALIGNMENT);
   __assume_aligned(X, ALIGNMENT);
   __assume_aligned(y_oh, ALIGNMENT);
 
-  memset(G, 0, sizeof(float) * c * WG_lda);
+  memset(G_tmp, 0, sizeof(float) * c * WG_lda);
 
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
               n, c, d,
@@ -104,6 +110,7 @@ void multinomial_gradient_batch
     float sum = cblas_sasum(c, Wx, 1);
 
     SAXPBY(c, -1, &y_oh[i * ys_lda], 1, (1 / sum), Wx, 1);
-    cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G, WG_lda);
+    cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G_tmp, WG_lda);
   }
+  SAXPBY(c * WG_lda, beta, G_tmp, 1, (1 - beta), G, 1);
 }
