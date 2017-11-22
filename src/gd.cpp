@@ -28,8 +28,6 @@ gd_losses_t sgd
  const size_t c,                // num classes
  const unsigned int niter,      // number of iterations to run
  const float alpha,             // step size
- const float beta,              // parameter of momentum
- const float lambda,            // regularization parameter
  const size_t batch_size,       // parameter of momentum
  const unsigned int seed        // random seed
  ) {
@@ -130,12 +128,12 @@ gd_losses_t sgd
 
   losses.times.push_back(0);
   loss_t loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                                 d, c, lambda, scratch_all);
+                                 d, c, scratch_all);
   losses.train_losses.push_back(loss.loss);
   losses.train_errors.push_back(loss.error);
 
   loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                          d, c, lambda, scratch_all);
+                          d, c, scratch_all);
   losses.test_losses.push_back(loss.loss);
   losses.test_errors.push_back(loss.error);
 
@@ -202,7 +200,7 @@ gd_losses_t sgd
 
     multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
                                batch_ys, ys_oh_lda,
-                               batch_size, d, c, beta, lambda, scratch);
+                               batch_size, d, c, scratch);
 
     SAXPBY(c * W_lda, -alpha * batch_size, G, 1, 1, W, 1);
 
@@ -212,9 +210,9 @@ gd_losses_t sgd
 #ifdef LOSSES
     loss_timer.start_timing_round();
     loss_t train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train,
-                                         n_train, d, c, lambda, scratch);
+                                         n_train, d, c, scratch);
     loss_t test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test,
-                                        n_test, d, c, lambda, scratch);
+                                        n_test, d, c, scratch);
     loss_timer.end_timing_round(1);
 
 #pragma omp critical
