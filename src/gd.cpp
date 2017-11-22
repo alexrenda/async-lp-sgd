@@ -100,7 +100,7 @@ gd_losses_t sgd
   float *batch_ys = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * ys_oh_lda);
   __assume_aligned(batch_ys, ALIGNMENT);
   // vector used for fisher-yates-esque batch selection w/out replacement
-  unsigned int *batch_idx = (unsigned int*) malloc(sizeof(unsigned int) * n_train);
+  unsigned int *batch_idx = (unsigned int*) ALIGNED_MALLOC(sizeof(unsigned int) * n_train);
   __assume_aligned(batch_idx, ALIGNMENT);
 
   // collection of uniform distributions for batch selection
