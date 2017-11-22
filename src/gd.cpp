@@ -34,7 +34,7 @@ gd_losses_t sgd
  const unsigned int seed        // random seed
  ) {
 #ifdef HOGWILD
-  omp_set_num_threads(16);
+  // omp_set_num_threads(16);
 #else
   omp_set_num_threads(1);
 #endif
