@@ -28,9 +28,9 @@ gd_losses_t sgd
  const size_t c,                // num classes
  const unsigned int niter,      // number of iterations to run
  const float alpha,             // step size
- const float beta,              // parameter of momentum
+ const float beta,              // momentum parameter
  const float lambda,            // regularization parameter
- const size_t batch_size,       // parameter of momentum
+ const size_t batch_size,       // batch size
  const unsigned int seed        // random seed
  ) {
 #ifdef HOGWILD
