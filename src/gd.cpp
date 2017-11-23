@@ -89,9 +89,12 @@ gd_losses_t sgd
 
 
   // gradient
-  float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
-  __assume_aligned(G_all, ALIGNMENT);
-  memset(G_all, 0, c * W_lda * omp_get_max_threads() * sizeof(float));
+  float* __restrict__ V = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
+  __assume_aligned(V, ALIGNMENT);
+  memset(V, 0, c * W_lda * sizeof(float));
+
+  float* __restrict__ V_tmp_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
+  __assume_aligned(V_tmp_all, ALIGNMENT);
 
   // tmp array for holding batch X
   float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
@@ -143,7 +146,7 @@ gd_losses_t sgd
   timing_t grad_timer = timing_t();
 
 #ifdef PROGRESS
-  fprintf(stderr, "TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | TEST LOSS | TEST ERROR | WC TIME\n");
+  fprintf(stderr, "TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | GRAD SIZE | TEST ERROR | WC TIME\n");
   fflush(stderr);
 #endif /* PROGRESS */
 
@@ -153,18 +156,23 @@ gd_losses_t sgd
     float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
     __assume_aligned(scratch, ALIGNMENT);
 
-    float* __restrict__ G = &G_all[c * W_lda * tno];
-    __assume_aligned(G, ALIGNMENT);
+    float* __restrict__ V_tmp = &V_tmp_all[c * W_lda * tno];
+    __assume_aligned(V_tmp, ALIGNMENT);
 
 #ifdef PROGRESS
 #pragma omp critical
     {
       unsigned int it = losses.times.size();
+      float grad_size = 0;
+      for (unsigned int k = 0; k < c; k++) {
+        grad_size += cblas_snrm2(d, &V[k * W_lda], 1);
+      }
+      grad_size /= c;
 
       fprintf(stderr,
               "%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, it,
               losses.train_losses.back(), losses.train_errors.back(),
-              losses.test_losses.back(), losses.test_errors.back(),
+              grad_size, losses.test_errors.back(),
               grad_timer.total_time()
               );
       if (it % (niter / 10) == 0) {
@@ -200,11 +208,28 @@ gd_losses_t sgd
       }
     }
 
-    multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
-                               batch_ys, ys_oh_lda,
-                               batch_size, d, c, beta, lambda, scratch);
 
-    SAXPBY(c * W_lda, -alpha * batch_size, G, 1, 1, W, 1);
+#pragma vector aligned
+    for (unsigned int k = 0; k < c; k++) {
+#pragma vector aligned
+      for (unsigned int j = 0; j < d; j++) {
+        V_tmp[k * W_lda + j] = V[k * W_lda + j];
+      }
+    }
+
+    multinomial_gradient_batch(V, W, W_lda, batch_X, X_lda,
+                               batch_ys, ys_oh_lda,
+                               batch_size, d, c, alpha, beta, lambda, scratch);
+
+#pragma vector aligned
+    for (unsigned int k = 0; k < c; k++) {
+#pragma vector aligned
+      for (unsigned int j = 0; j < d; j++) {
+        W[k * W_lda + j] +=
+          -beta * V_tmp[k * W_lda + j] +
+          (1 + beta) * V[k * W_lda + j];
+      }
+    }
 
 #pragma omp critical
     grad_timer.end_timing_round(batch_size);
@@ -252,7 +277,8 @@ gd_losses_t sgd
   ALIGNED_FREE((unsigned int*) ys_idx_test);
   ALIGNED_FREE((float*) ys_oh_test);
   ALIGNED_FREE((float*) scratch_all);
-  ALIGNED_FREE(G_all);
+  ALIGNED_FREE(V);
+  ALIGNED_FREE(V_tmp_all);
   ALIGNED_FREE(batch_idx);
   ALIGNED_FREE(batch_X);
   ALIGNED_FREE(batch_ys);

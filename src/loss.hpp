@@ -40,6 +40,7 @@ void multinomial_gradient_batch
  const size_t n,                // number of samples
  const size_t d,                // data dimensionality
  const size_t c,                // num classes
+ const float alpha,             // learning rate
  const float beta,              // momentum parameter
  const float lambda,            // regularization parameter
  float* __restrict__ scratch    // scratch space
