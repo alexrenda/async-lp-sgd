@@ -134,8 +134,18 @@ gd_losses_t sgd
 
   loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
                           d, c, lambda, scratch_all);
-  losses.test_losses.push_back(loss.loss);
   losses.test_errors.push_back(loss.error);
+
+  multinomial_gradient_batch(G_all, W, W_lda, batch_X, X_lda,
+                             batch_ys, ys_oh_lda,
+                             batch_size, d, c, lambda, scratch_all);
+
+  float nrm = 0;
+  for (unsigned int k = 0 ; k < c; k++) {
+    nrm += cblas_snrm2(d, &G_all[k * W_lda], 1);
+  }
+  nrm /= c;
+  losses.grad_sizes.push_back(nrm);
 
   timing_t loss_timer = timing_t();
   timing_t grad_timer = timing_t();
@@ -184,10 +194,23 @@ gd_losses_t sgd
                                batch_ys, ys_oh_lda,
                                batch_size, d, c, lambda, scratch);
 
-    SAXPBY(c * W_lda, -alpha * batch_size, G, 1, 1, W, 1);
+    SAXPBY(c * W_lda, -alpha, G, 1, 1, W, 1);
 
 #pragma omp critical
     grad_timer.end_timing_round(batch_size);
+
+
+    nrm = 0;
+    for (unsigned int k = 0 ; k < c; k++) {
+      nrm += cblas_snrm2(d, &G[k * W_lda], 1);
+    }
+    nrm /= c;
+
+#pragma omp critical
+    {
+      losses.times.push_back(grad_timer.total_time());
+      losses.grad_sizes.push_back(nrm);
+    }
 
 #ifdef LOSSES
     loss_timer.start_timing_round();
@@ -199,10 +222,8 @@ gd_losses_t sgd
 
 #pragma omp critical
     {
-      losses.times.push_back(grad_timer.total_time());
       losses.train_losses.push_back(train_loss.loss);
       losses.train_errors.push_back(train_loss.error);
-      losses.test_losses.push_back(test_loss.loss);
       losses.test_errors.push_back(test_loss.error);
     }
 
@@ -212,16 +233,11 @@ gd_losses_t sgd
 #pragma omp critical
     {
       unsigned int it = losses.times.size();
-      float nrm = 0;
-      for (unsigned int k = 0 ; k < c; k++) {
-        nrm += cblas_snrm2(d, G, 1);
-      }
-      nrm /= c;
 
       fprintf(stderr,
               "%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, it,
               losses.train_losses.back(), losses.train_errors.back(),
-              nrm, losses.test_errors.back(),
+              losses.grad_sizes.back(),losses.test_errors.back(),
               grad_timer.total_time()
               );
       if (it % (niter / 10) == 0) {
@@ -242,8 +258,6 @@ gd_losses_t sgd
 #ifdef LOSSES
   fprintf(stderr, "Final training loss: %f\n", losses.train_losses.back());
   fprintf(stderr, "Final training error: %f\n", losses.train_errors.back());
-
-  fprintf(stderr, "Final testing loss: %f\n", losses.test_losses.back());
   fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
 #endif /* LOSSES */
 

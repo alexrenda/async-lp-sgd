@@ -35,7 +35,7 @@ int main() {
 
   gd_losses_t losses = sgd(X_train, ys_idx_train, ys_oh_train, n_train,
                            X_test, ys_idx_test, ys_oh_test, n_test,
-                           d, c, niter, 0.001, 1 / (c * d),
+                           d, c, niter, 0.01, 0 / (c * d),
                            16, 1234);
 
   size_t n_losses = losses.times.size();
@@ -43,7 +43,7 @@ int main() {
   assert(losses.times.size() == n_losses);
   assert(losses.train_losses.size() == n_losses);
   assert(losses.train_errors.size() == n_losses);
-  assert(losses.test_losses.size() == n_losses);
+  assert(losses.grad_sizes.size() == n_losses);
   assert(losses.test_errors.size() == n_losses);
 
   for (unsigned int i = 0; i < n_losses; i++) {
@@ -51,7 +51,7 @@ int main() {
            losses.times[i],
            losses.train_losses[i],
            losses.train_errors[i],
-           losses.test_losses[i],
+           losses.grad_sizes[i],
            losses.test_errors[i]
            );
   }

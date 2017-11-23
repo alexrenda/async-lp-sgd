@@ -6,7 +6,7 @@
 typedef struct gd_losses {
   std::vector<float> train_losses;
   std::vector<float> train_errors;
-  std::vector<float> test_losses;
+  std::vector<float> grad_sizes;
   std::vector<float> test_errors;
   std::vector<float> times;
 } gd_losses_t;
