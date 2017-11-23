@@ -1,6 +1,11 @@
 #ifndef GD_H
 #define GD_HPP
 
+
+#define PROGRESS
+#define LOSSES
+#define HOGWILD
+
 #include <vector>
 
 typedef struct gd_losses {

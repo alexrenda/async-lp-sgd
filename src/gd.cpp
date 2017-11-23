@@ -9,11 +9,6 @@
 #include "mblas.hpp"
 #include "timing.hpp"
 
-#define PROGRESS
-#define LOSSES
-
-#define HOGWILD
-
 gd_losses_t sgd
 (
  const float* __restrict__ X_train_in,             // n x d
