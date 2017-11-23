@@ -2,10 +2,10 @@
 #define GD_HPP
 
 
-// #define PROGRESS
+#define PROGRESS
 #define LOSSES
 #define HOGWILD
-#define RAW_OUTPUT
+// #define RAW_OUTPUT
 
 #include <vector>
 

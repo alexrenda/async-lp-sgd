@@ -96,6 +96,7 @@ void multinomial_gradient_batch
  const size_t n,              // number of losses
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
+ const float scale,           // result scale factor
  const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
  ) {
@@ -131,7 +132,7 @@ void multinomial_gradient_batch
     const float *Wk = &W[k * WG_lda];
 
     for (unsigned int j = 0; j < d; j++) {
-      Gk[j] = Gk[j] / n + lambda * Wk[j];
+      Gk[j] = scale * (Gk[j] / n + lambda * Wk[j]);
     }
   }
 }

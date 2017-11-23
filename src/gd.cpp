@@ -138,7 +138,7 @@ gd_losses_t sgd
 
   multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
                              ys_oh_train, ys_oh_lda,
-                             n_train, d, c, lambda, scratch_all);
+                             n_train, d, c, 1, lambda, scratch_all);
 
   float nrm = 0;
   for (unsigned int k = 0 ; k < c; k++) {
@@ -159,14 +159,14 @@ gd_losses_t sgd
 
   for (unsigned int j = 0; j < c; j++) {
     for (unsigned int k = 0; k < d; k++) {
-      W_tilde[j * W_lda + k] = -W[j * W_lda + k];
+      W_tilde[j * W_lda + k] = W[j * W_lda + k];
     }
   }
 
   memset(mu_tilde, 0, sizeof(float) * c * W_lda);
   multinomial_gradient_batch(mu_tilde, W, W_lda, X_train, X_lda,
                              ys_oh_train, ys_oh_lda,
-                             n_train, d, c, lambda, scratch_all);
+                             n_train, d, c, 1, lambda, scratch_all);
 
 #pragma omp parallel for
     for (unsigned int _iter = 0; _iter < niter; _iter++) {
@@ -209,13 +209,13 @@ gd_losses_t sgd
         }
       }
 
-      multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
-                                 batch_ys, ys_oh_lda,
-                                 batch_size, d, c, lambda, scratch);
-
       multinomial_gradient_batch(G, W_tilde, W_lda, batch_X, X_lda,
                                  batch_ys, ys_oh_lda,
-                                 batch_size, d, c, lambda, scratch);
+                                 batch_size, d, c, -1, lambda, scratch);
+
+      multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
+                                 batch_ys, ys_oh_lda,
+                                 batch_size, d, c, 1, lambda, scratch);
 
       SAXPBY(c * W_lda, -alpha, G, 1, 1, W, 1);
 
@@ -312,7 +312,7 @@ gd_losses_t sgd
 
   multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
                              ys_oh_train, ys_oh_lda,
-                             n_train, d, c, lambda, scratch_all);
+                             n_train, d, c, 1, lambda, scratch_all);
 
   nrm = 0;
   for (unsigned int k = 0 ; k < c; k++) {
