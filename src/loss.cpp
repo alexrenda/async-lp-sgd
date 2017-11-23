@@ -49,8 +49,16 @@ loss_t multinomial_loss
     const float* Wx = &XWT[i * XWT_lda];
     __assume_aligned(Wx, ALIGNMENT);
 
-    const int maxidx = cblas_isamax(c, Wx, 1);
-    const float maxval = Wx[maxidx];
+    unsigned int maxidx = 0;
+    float maxval = Wx[maxidx];
+
+    for (int j = 1; j < c; j++) {
+      const float m_val = Wx[j];
+      if (m_val > maxval) {
+        maxidx = j;
+        maxval = m_val;
+      }
+    }
 
     float sum = 0;
 
