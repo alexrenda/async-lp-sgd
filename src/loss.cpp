@@ -49,42 +49,18 @@ loss_t multinomial_loss
     const float* Wx = &XWT[i * XWT_lda];
     __assume_aligned(Wx, ALIGNMENT);
 
-    float maxval = Wx[0];
-    float maxidx = 0;
-    float minval = Wx[0];
-    float minidx = 0;
-
-    for (unsigned int j = 1; j < c; j++) {
-      const float m_val = Wx[j];
-      if (m_val > maxval) {
-        maxidx = j;
-        maxval = m_val;
-      } else if (m_val < minval) {
-        minidx = j;
-        minval = m_val;
-      }
-    }
-
     float sum = 0;
 
     for (unsigned int j = 0; j < c; j++) {
-      sum += expf(Wx[j] - minval);
+      sum += expf(Wx[j]);
     }
 
-    float numerator = expf(Wx[y[i]] - minval);
-    loss -= logf(numerator / sum);
-    correct += maxidx == y[i];
-  }
-
-  float reg = 0;
-  for (unsigned int k = 0; k < c; k++) {
-    for (unsigned int j = 0; j < d; j++) {
-      reg += W[k * W_lda + j];
-    }
+    loss += logf(sum) - Wx[y[i]];
+    correct += cblas_isamax(c, Wx, 1) == y[i];
   }
 
   loss_t ret;
-  ret.loss = loss / n + lambda * reg / 2;
+  ret.loss = loss / n;
   ret.error = 1 - ((float)correct) / n;
 
   return ret;
@@ -92,7 +68,7 @@ loss_t multinomial_loss
 
 void multinomial_gradient_batch
 (
- float* __restrict__ V,       // c x d
+ float* __restrict__ G,       // c x d
  const float* __restrict__ W, // c x d
  const size_t WG_lda,         // lda (axis 1 stride) of W and G
  const float* __restrict__ X, // n x d data
@@ -102,7 +78,6 @@ void multinomial_gradient_batch
  const size_t n,              // number of losses
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
- const float alpha,           // learning rate
  const float beta,            // momentum parameter
  const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
@@ -113,7 +88,7 @@ void multinomial_gradient_batch
   float *G_tmp   /* c x d */ = XWT + n * XWT_lda;
 
   __assume_aligned(XWT, ALIGNMENT);
-  __assume_aligned(V, ALIGNMENT);
+  __assume_aligned(G, ALIGNMENT);
   __assume_aligned(G_tmp, ALIGNMENT);
   __assume_aligned(W, ALIGNMENT);
   __assume_aligned(X, ALIGNMENT);
@@ -137,15 +112,5 @@ void multinomial_gradient_batch
     SAXPBY(c, -1, &y_oh[i * ys_lda], 1, (1 / sum), Wx, 1);
     cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G_tmp, WG_lda);
   }
-
-  for (unsigned int k = 0; k < c; k++) {
-    for (unsigned int j = 0; j < d; j++) {
-
-      if (G_tmp[k * WG_lda + j] > 0) {
-        V[k * WG_lda + j] =
-          beta * V[k * WG_lda + j]
-          - alpha * (G_tmp[k * WG_lda + j]/n + lambda * W[k * WG_lda + j]);
-      }
-    }
-  }
+  SAXPBY(c * WG_lda, beta, G_tmp, 1, (1 - beta), G, 1);
 }
