@@ -49,18 +49,29 @@ loss_t multinomial_loss
     const float* Wx = &XWT[i * XWT_lda];
     __assume_aligned(Wx, ALIGNMENT);
 
+    const int maxidx = cblas_isamax(c, Wx, 1);
+    const float maxval = Wx[maxidx];
+
     float sum = 0;
 
     for (unsigned int j = 0; j < c; j++) {
-      sum += expf(Wx[j]);
+      sum += expf(Wx[j] - maxval);
     }
 
-    loss += logf(sum) - Wx[y[i]];
-    correct += cblas_isamax(c, Wx, 1) == y[i];
+    float numerator = expf(Wx[y[i]] - maxval);
+    loss -= logf(numerator / sum);
+    correct += maxidx == y[i];
+  }
+
+  float reg = 0;
+  for (unsigned int k = 0; k < c; k++) {
+    for (unsigned int j = 0; j < d; j++) {
+      reg += W[k * W_lda + j];
+    }
   }
 
   loss_t ret;
-  ret.loss = loss / n;
+  ret.loss = loss / n + 2 * lambda * reg;
   ret.error = 1 - ((float)correct) / n;
 
   return ret;
@@ -78,23 +89,21 @@ void multinomial_gradient_batch
  const size_t n,              // number of losses
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
- const float beta,            // momentum parameter
  const float lambda,          // regularization parameter
  float* __restrict__ scratch  // scratch space
  ) {
   float *XWT   /* n x c */ = scratch;
   const size_t XWT_lda = ALIGN_ABOVE(c);
 
-  float *G_tmp   /* c x d */ = XWT + n * XWT_lda;
-
   __assume_aligned(XWT, ALIGNMENT);
   __assume_aligned(G, ALIGNMENT);
-  __assume_aligned(G_tmp, ALIGNMENT);
   __assume_aligned(W, ALIGNMENT);
   __assume_aligned(X, ALIGNMENT);
   __assume_aligned(y_oh, ALIGNMENT);
 
-  memset(G_tmp, 0, sizeof(float) * c * WG_lda);
+  memset(G, 0, sizeof(float) * c * WG_lda);
+
+  cblas_saxpy(c * WG_lda, lambda, W, 1, G, 1);
 
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
               n, c, d,
@@ -110,7 +119,8 @@ void multinomial_gradient_batch
     float sum = cblas_sasum(c, Wx, 1);
 
     SAXPBY(c, -1, &y_oh[i * ys_lda], 1, (1 / sum), Wx, 1);
-    cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G_tmp, WG_lda);
+    cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G, WG_lda);
   }
-  SAXPBY(c * WG_lda, beta, G_tmp, 1, (1 - beta), G, 1);
+
+  SAXPBY(c * WG_lda, lambda, W, 1, 1, G, 1);
 }

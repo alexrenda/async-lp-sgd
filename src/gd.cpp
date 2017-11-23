@@ -28,7 +28,6 @@ gd_losses_t sgd
  const size_t c,                // num classes
  const unsigned int niter,      // number of iterations to run
  const float alpha,             // step size
- const float beta,              // momentum parameter
  const float lambda,            // regularization parameter
  const size_t batch_size,       // batch size
  const unsigned int seed        // random seed
@@ -91,7 +90,6 @@ gd_losses_t sgd
   // gradient
   float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
   __assume_aligned(G_all, ALIGNMENT);
-  memset(G_all, 0, c * W_lda * omp_get_max_threads() * sizeof(float));
 
   // tmp array for holding batch X
   float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
@@ -143,7 +141,7 @@ gd_losses_t sgd
   timing_t grad_timer = timing_t();
 
 #ifdef PROGRESS
-  fprintf(stderr, "TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | TEST LOSS | TEST ERROR | WC TIME\n");
+  fprintf(stderr, "TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | GRAD NORM | TEST ERROR | WC TIME\n");
   fflush(stderr);
 #endif /* PROGRESS */
 
@@ -155,24 +153,6 @@ gd_losses_t sgd
 
     float* __restrict__ G = &G_all[c * W_lda * tno];
     __assume_aligned(G, ALIGNMENT);
-
-#ifdef PROGRESS
-#pragma omp critical
-    {
-      unsigned int it = losses.times.size();
-
-      fprintf(stderr,
-              "%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, it,
-              losses.train_losses.back(), losses.train_errors.back(),
-              losses.test_losses.back(), losses.test_errors.back(),
-              grad_timer.total_time()
-              );
-      if (it % (niter / 10) == 0) {
-        fprintf(stderr, "\n");
-      }
-    }
-    fflush(stderr);
-#endif /* PROGRESS */
 
 #pragma omp critical
     grad_timer.start_timing_round();
@@ -202,7 +182,7 @@ gd_losses_t sgd
 
     multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
                                batch_ys, ys_oh_lda,
-                               batch_size, d, c, beta, lambda, scratch);
+                               batch_size, d, c, lambda, scratch);
 
     SAXPBY(c * W_lda, -alpha * batch_size, G, 1, 1, W, 1);
 
@@ -227,6 +207,29 @@ gd_losses_t sgd
     }
 
 #endif /* LOSSES */
+
+#ifdef PROGRESS
+#pragma omp critical
+    {
+      unsigned int it = losses.times.size();
+      float nrm = 0;
+      for (unsigned int k = 0 ; k < c; k++) {
+        nrm += cblas_snrm2(d, G, 1);
+      }
+      nrm /= c;
+
+      fprintf(stderr,
+              "%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, it,
+              losses.train_losses.back(), losses.train_errors.back(),
+              nrm, losses.test_errors.back(),
+              grad_timer.total_time()
+              );
+      if (it % (niter / 10) == 0) {
+        fprintf(stderr, "\n");
+      }
+    }
+    fflush(stderr);
+#endif /* PROGRESS */
   }
 
 #ifdef PROGRESS

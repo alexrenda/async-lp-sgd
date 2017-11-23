@@ -34,9 +34,9 @@ int main() {
   const unsigned int niter = 1000;
 
   gd_losses_t losses = sgd(X_train, ys_idx_train, ys_oh_train, n_train,
-                      X_test, ys_idx_test, ys_oh_test, n_test,
-                      d, c, niter, 0.001, 0.99, 1 / d,
-                      16, 1234);
+                           X_test, ys_idx_test, ys_oh_test, n_test,
+                           d, c, niter, 0.001, 1 / (c * d),
+                           16, 1234);
 
   size_t n_losses = losses.times.size();
 

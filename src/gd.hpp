@@ -25,7 +25,6 @@ gd_losses_t sgd
  const size_t c,                // num classes
  const unsigned int niter,      // number of iterations to run
  const float alpha,             // step size
- const float beta,              // parameter of momentum
  const float lambda,            // regularization parameter
  const size_t batch_size,       // parameter of momentum
  const unsigned int seed        // random seed
