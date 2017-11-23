@@ -3,7 +3,7 @@
 
 
 #define PROGRESS
-#define LOSSES
+// #define LOSSES
 #define HOGWILD
 
 #include <vector>

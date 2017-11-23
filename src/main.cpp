@@ -31,11 +31,11 @@ int main() {
   unsigned int *ys_idx_test = test.labels_idx.data();
   float *ys_oh_test = test.labels_oh.data();
 
-  const unsigned int niter = 40000;
+  const unsigned int niter = 1000000;
 
   gd_losses_t losses = sgd(X_train, ys_idx_train, ys_oh_train, n_train,
                            X_test, ys_idx_test, ys_oh_test, n_test,
-                           d, c, niter, 0.0001, 1,
+                           d, c, niter, 0.0001, 0,
                            16, 1234);
 
   size_t n_losses = losses.times.size();

@@ -131,9 +131,9 @@ gd_losses_t sgd
                           d, c, lambda, scratch_all);
   losses.test_errors.push_back(loss.error);
 
-  multinomial_gradient_batch(G_all, W, W_lda, batch_X, X_lda,
-                             batch_ys, ys_oh_lda,
-                             batch_size, d, c, lambda, scratch_all);
+  multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
+                             ys_oh_train, ys_oh_lda,
+                             n_train, d, c, lambda, scratch_all);
 
   float nrm = 0;
   for (unsigned int k = 0 ; k < c; k++) {
@@ -250,11 +250,34 @@ gd_losses_t sgd
   fprintf(stderr, "Grad time per step: %f\n", grad_timer.time_per_step());
   fprintf(stderr, "Loss time per step: %f\n", loss_timer.time_per_step());
 
-#ifdef LOSSES
+
+
+  losses.times.push_back(grad_timer.total_time());
+  loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
+                                 d, c, lambda, scratch_all);
+  losses.train_losses.push_back(loss.loss);
+  losses.train_errors.push_back(loss.error);
+
+  loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
+                          d, c, lambda, scratch_all);
+  losses.test_errors.push_back(loss.error);
+
+  multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
+                             ys_oh_train, ys_oh_lda,
+                             n_train, d, c, lambda, scratch_all);
+
+  nrm = 0;
+  for (unsigned int k = 0 ; k < c; k++) {
+    nrm += cblas_snrm2(d, &G_all[k * W_lda], 1);
+  }
+  nrm /= c;
+  losses.grad_sizes.push_back(nrm);
+
+
+
   fprintf(stderr, "Final training loss: %f\n", losses.train_losses.back());
   fprintf(stderr, "Final training error: %f\n", losses.train_errors.back());
   fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
-#endif /* LOSSES */
 
   ALIGNED_FREE(W);
   ALIGNED_FREE((float*) X_train);
