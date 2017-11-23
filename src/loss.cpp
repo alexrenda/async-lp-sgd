@@ -58,8 +58,7 @@ loss_t multinomial_loss
       sum += expf(Wx[j] - maxval);
     }
 
-    float numerator = expf(Wx[y[i]] - maxval);
-    loss -= logf(numerator / sum);
+    loss -= Wx[y[i]] - maxval - logf(sum);
     correct += maxidx == y[i];
   }
 
