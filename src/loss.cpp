@@ -47,12 +47,11 @@ loss_t multinomial_loss
 
   for (unsigned int i = 0; i < n; i++) {
     const float* Wx = &XWT[i * XWT_lda];
-    __assume_aligned(Wx, ALIGNMENT);
 
     unsigned int maxidx = 0;
     float maxval = Wx[maxidx];
 
-    for (int j = 1; j < c; j++) {
+    for (unsigned int j = 1; j < c; j++) {
       const float m_val = Wx[j];
       if (m_val > maxval) {
         maxidx = j;
@@ -72,8 +71,9 @@ loss_t multinomial_loss
 
   float reg = 0;
   for (unsigned int k = 0; k < c; k++) {
+    const float *Wk = &W[k * W_lda];
     for (unsigned int j = 0; j < d; j++) {
-      reg += W[k * W_lda + j];
+      reg += Wk[j];
     }
   }
 
@@ -117,6 +117,7 @@ void multinomial_gradient_batch
 
   for (unsigned int i = 0; i < n; i++) {
     float *Wx = &XWT[i * XWT_lda];
+    __assume_aligned(Wx, ALIGNMENT);
     const float *x = &X[i * X_lda];
 
     vsExp(c, Wx, Wx);
@@ -128,10 +129,11 @@ void multinomial_gradient_batch
   }
 
   for (unsigned int k = 0; k < c; k++) {
+    float *Gk = &G[k * WG_lda];
+    const float *Wk = &W[k * WG_lda];
+
     for (unsigned int j = 0; j < d; j++) {
-      G[k * WG_lda + j] =
-        G[k * WG_lda + j] / n
-        + lambda * W[k * WG_lda + j];
+      Gk[j] = Gk[j] / n + lambda * Wk[j];
     }
   }
 }

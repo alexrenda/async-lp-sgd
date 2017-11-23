@@ -1,7 +1,7 @@
 #ifndef MBLAS_H
 #define MBLAS_H
 
-#define ALIGNMENT 16
+#define ALIGNMENT 64
 
 #define CEIL_DIV(n, d) (((n) + (d) - 1) / (d))
 #define ALIGN_ABOVE(n) (CEIL_DIV(n, ALIGNMENT) * ALIGNMENT)
