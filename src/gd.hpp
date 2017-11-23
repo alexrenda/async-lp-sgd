@@ -2,9 +2,10 @@
 #define GD_HPP
 
 
-#define PROGRESS
-// #define LOSSES
+// #define PROGRESS
+#define LOSSES
 #define HOGWILD
+#define RAW_OUTPUT
 
 #include <vector>
 
@@ -28,7 +29,8 @@ gd_losses_t sgd
  const size_t n_test,           // num training samples
  const size_t d,                // data dimensionality
  const size_t c,                // num classes
- const unsigned int niter,      // number of iterations to run
+ const unsigned int nepoch,      // number of epochs to run
+ const unsigned int niter,      // number of iterations to run per epoch
  const float alpha,             // step size
  const float lambda,            // regularization parameter
  const size_t batch_size,       // parameter of momentum

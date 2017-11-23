@@ -108,8 +108,6 @@ void multinomial_gradient_batch
   __assume_aligned(X, ALIGNMENT);
   __assume_aligned(y_oh, ALIGNMENT);
 
-  memset(G, 0, sizeof(float) * c * WG_lda);
-
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
               n, c, d,
               1, X, X_lda, W, WG_lda,

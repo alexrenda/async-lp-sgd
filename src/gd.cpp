@@ -21,7 +21,8 @@ gd_losses_t sgd
  const size_t n_test,           // num training samples
  const size_t d,                // data dimensionality
  const size_t c,                // num classes
- const unsigned int niter,      // number of iterations to run
+ const unsigned int nepoch,     // number of epochs to run (zero for SGD)
+ const unsigned int niter,      // number of iterations to run per epoch
  const float alpha,             // step size
  const float lambda,            // regularization parameter
  const size_t batch_size,       // batch size
@@ -52,6 +53,8 @@ gd_losses_t sgd
 
   float* __restrict__ W = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
   __assume_aligned(W, ALIGNMENT);
+  float* __restrict__ W_tilde = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
+  __assume_aligned(W_tilde, ALIGNMENT);
 
   const float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
   __assume_aligned(X_train, ALIGNMENT);
@@ -85,6 +88,8 @@ gd_losses_t sgd
   // gradient
   float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
   __assume_aligned(G_all, ALIGNMENT);
+  float* __restrict__ mu_tilde = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
+  __assume_aligned(mu_tilde, ALIGNMENT);
 
   // tmp array for holding batch X
   float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
@@ -146,101 +151,144 @@ gd_losses_t sgd
   timing_t grad_timer = timing_t();
 
 #ifdef PROGRESS
-  fprintf(stderr, "TOTAL ITERS | ITER NUM | TRAIN LOSS | TRAIN ERROR | GRAD NORM | TEST ERROR | WC TIME\n");
+  fprintf(stderr, "#/# EPOCH | #/# ITERATION | TRAIN LOSS | TRAIN ERR | NORM | TEST ERR | WC TIME\n");
   fflush(stderr);
 #endif /* PROGRESS */
 
+  for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
+
+  for (unsigned int j = 0; j < c; j++) {
+    for (unsigned int k = 0; k < d; k++) {
+      W_tilde[j * W_lda + k] = -W[j * W_lda + k];
+    }
+  }
+
+  memset(mu_tilde, 0, sizeof(float) * c * W_lda);
+  multinomial_gradient_batch(mu_tilde, W, W_lda, X_train, X_lda,
+                             ys_oh_train, ys_oh_lda,
+                             n_train, d, c, lambda, scratch_all);
+
 #pragma omp parallel for
-  for (unsigned int _iter = 0; _iter < niter; _iter++) {
-    unsigned int tno = omp_get_thread_num();
-    float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
-    __assume_aligned(scratch, ALIGNMENT);
+    for (unsigned int _iter = 0; _iter < niter; _iter++) {
+      unsigned int tno = omp_get_thread_num();
+      float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
+      __assume_aligned(scratch, ALIGNMENT);
 
-    float* __restrict__ G = &G_all[c * W_lda * tno];
-    __assume_aligned(G, ALIGNMENT);
+      float* __restrict__ G = &G_all[c * W_lda * tno];
+      __assume_aligned(G, ALIGNMENT);
 
 #pragma omp critical
-    grad_timer.start_timing_round();
+      grad_timer.start_timing_round();
 
-    for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
-      const unsigned int rand_idx = batch_dists[bidx](gen);
-      const unsigned int idx = batch_idx[rand_idx];
-      batch_idx[rand_idx] = batch_idx[n_train - 1 - bidx];
-      batch_idx[n_train - 1 - bidx] = idx;
-
-      float *x_dst = &batch_X[bidx * X_lda];
-      const float *x_src = &X_train[idx * X_lda];
-
-#pragma vector aligned
-      for (unsigned int j = 0; j < d; j++) {
-        x_dst[j] = x_src[j];
+      for (unsigned int j = 0; j < c; j++) {
+        for (unsigned int k = 0; k < d; k++) {
+          G[j * W_lda + k] = mu_tilde[j * W_lda + k];
+        }
       }
 
-      float *ys_dst = &batch_ys[bidx * ys_oh_lda];
-      const float *ys_src = &ys_oh_train[idx * ys_oh_lda];
+      for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
+        const unsigned int rand_idx = batch_dists[bidx](gen);
+        const unsigned int idx = batch_idx[rand_idx];
+        batch_idx[rand_idx] = batch_idx[n_train - 1 - bidx];
+        batch_idx[n_train - 1 - bidx] = idx;
+
+        float *x_dst = &batch_X[bidx * X_lda];
+        const float *x_src = &X_train[idx * X_lda];
 
 #pragma vector aligned
-      for (unsigned int k = 0; k < c; k++) {
-        ys_dst[k] = ys_src[k];
+        for (unsigned int j = 0; j < d; j++) {
+          x_dst[j] = x_src[j];
+        }
+
+        float *ys_dst = &batch_ys[bidx * ys_oh_lda];
+        const float *ys_src = &ys_oh_train[idx * ys_oh_lda];
+
+#pragma vector aligned
+        for (unsigned int k = 0; k < c; k++) {
+          ys_dst[k] = ys_src[k];
+        }
       }
-    }
 
-    multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
-                               batch_ys, ys_oh_lda,
-                               batch_size, d, c, lambda, scratch);
+      multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
+                                 batch_ys, ys_oh_lda,
+                                 batch_size, d, c, lambda, scratch);
 
-    SAXPBY(c * W_lda, -alpha, G, 1, 1, W, 1);
+      multinomial_gradient_batch(G, W_tilde, W_lda, batch_X, X_lda,
+                                 batch_ys, ys_oh_lda,
+                                 batch_size, d, c, lambda, scratch);
 
-#pragma omp critical
-    grad_timer.end_timing_round(batch_size);
-
-
-    nrm = 0;
-    for (unsigned int k = 0 ; k < c; k++) {
-      nrm += cblas_snrm2(d, &G[k * W_lda], 1);
-    }
-    nrm /= c;
+      SAXPBY(c * W_lda, -alpha, G, 1, 1, W, 1);
 
 #pragma omp critical
-    {
-      losses.times.push_back(grad_timer.total_time());
-      losses.grad_sizes.push_back(nrm);
-    }
+      grad_timer.end_timing_round(batch_size);
+
+
+      nrm = 0;
+      for (unsigned int k = 0 ; k < c; k++) {
+        nrm += cblas_snrm2(d, &G[k * W_lda], 1);
+      }
+      nrm /= c;
+
+#pragma omp critical
+      {
+        losses.times.push_back(grad_timer.total_time());
+        losses.grad_sizes.push_back(nrm);
+      }
 
 #ifdef LOSSES
-    loss_timer.start_timing_round();
-    loss_t train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train,
-                                         n_train, d, c, lambda, scratch);
-    loss_t test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test,
-                                        n_test, d, c, lambda, scratch);
-    loss_timer.end_timing_round(1);
+      loss_timer.start_timing_round();
+      loss_t train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train,
+                                           n_train, d, c, lambda, scratch);
+      loss_t test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test,
+                                          n_test, d, c, lambda, scratch);
+      loss_timer.end_timing_round(1);
 
 #pragma omp critical
-    {
-      losses.train_losses.push_back(train_loss.loss);
-      losses.train_errors.push_back(train_loss.error);
-      losses.test_errors.push_back(test_loss.error);
-    }
+      {
+        losses.train_losses.push_back(train_loss.loss);
+        losses.train_errors.push_back(train_loss.error);
+        losses.test_errors.push_back(test_loss.error);
+      }
 
 #endif /* LOSSES */
 
+#ifdef RAW_OUTPUT
+      printf(
+#ifdef LOSSES
+             "%f %f %f %f %f\n",
+#else
+             "%f %f\n",
+#endif /* LOSSES */
+             grad_timer.total_time(),
+             nrm
+#ifdef LOSSES
+             , train_loss.loss,
+             train_loss.error,
+             test_loss.error
+#endif /* LOSSES */
+             );
+      fflush(stdout);
+#endif  /* RAW_OUTPUT */
+
 #ifdef PROGRESS
 #pragma omp critical
-    {
-      unsigned int it = losses.times.size();
+      {
+        unsigned int it = losses.times.size();
 
-      fprintf(stderr,
-              "%11d | %8d | %10.2f | %11.3f | %9.2f | %10.3f | %7.3f\r", niter, it,
-              losses.train_losses.back(), losses.train_errors.back(),
-              losses.grad_sizes.back(),losses.test_errors.back(),
-              grad_timer.total_time()
-              );
-      if (it % (niter / 10) == 0) {
-        fprintf(stderr, "\n");
+        fprintf(stderr,
+                "%4d %4d | %6d %6d | %10.2f | %9.3f | %4.2f | %8.3f | %7.3f\r",
+                _epoch, nepoch, it % niter, niter,
+                losses.train_losses.back(), losses.train_errors.back(),
+                losses.grad_sizes.back(),losses.test_errors.back(),
+                grad_timer.total_time()
+                );
+        if (it % (niter / 10) == 0) {
+          fprintf(stderr, "\n");
+        }
       }
-    }
-    fflush(stderr);
+      fflush(stderr);
 #endif /* PROGRESS */
+    }
   }
 
 #ifdef PROGRESS
@@ -280,6 +328,7 @@ gd_losses_t sgd
   fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
 
   ALIGNED_FREE(W);
+  ALIGNED_FREE(W_tilde);
   ALIGNED_FREE((float*) X_train);
   ALIGNED_FREE((unsigned int*) ys_idx_train);
   ALIGNED_FREE((float*) ys_oh_train);
@@ -288,6 +337,7 @@ gd_losses_t sgd
   ALIGNED_FREE((float*) ys_oh_test);
   ALIGNED_FREE((float*) scratch_all);
   ALIGNED_FREE(G_all);
+  ALIGNED_FREE(mu_tilde);
   ALIGNED_FREE(batch_idx);
   ALIGNED_FREE(batch_X);
   ALIGNED_FREE(batch_ys);
