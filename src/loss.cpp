@@ -110,8 +110,6 @@ void multinomial_gradient_batch
 
   memset(G, 0, sizeof(float) * c * WG_lda);
 
-  cblas_saxpy(c * WG_lda, lambda, W, 1, G, 1);
-
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
               n, c, d,
               1, X, X_lda, W, WG_lda,
@@ -129,5 +127,11 @@ void multinomial_gradient_batch
     cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G, WG_lda);
   }
 
-  SAXPBY(c * WG_lda, lambda, W, 1, 1, G, 1);
+  for (unsigned int k = 0; k < c; k++) {
+    for (unsigned int j = 0; j < d; j++) {
+      G[k * WG_lda + j] =
+        G[k * WG_lda + j] / n
+        + lambda * W[k * WG_lda + j];
+    }
+  }
 }
