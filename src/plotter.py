@@ -5,8 +5,6 @@ import numpy as np
 import sys
 import fileinput
 
-# return X' * ((1 ./ ((1 + exp(Y .* (X * w))) .* (1 + exp(-Y .* (X * w))))) .* X) / length(Y) + gamma_reg * eye(length(w));
-
 def main():
     iterations = []
     fields = []
