@@ -6,7 +6,7 @@
 #define LOSSES
 #define HOGWILD
 #define RAW_OUTPUT
-// #define ADAM_SHARED
+#define ADAM_SHARED
 
 #include <vector>
 

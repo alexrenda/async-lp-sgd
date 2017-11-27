@@ -240,7 +240,7 @@ gd_losses_t sgd
     for (unsigned int j = 0; j < c; j++) {
 #pragma vector aligned
       for (unsigned int k = 0; k < d; k++) {
-        if (abs(G[j * W_lda + k]) > 0) {
+        if (fabs(G[j * W_lda + k]) > 0) {
           m_m[j * W_lda + k] =
             beta_1 * m_m[j * W_lda + k]
             + (1 - beta_1) * G[j * W_lda + k];
