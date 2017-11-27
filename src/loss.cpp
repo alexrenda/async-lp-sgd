@@ -217,7 +217,7 @@ void logistic_gradient_batch
 
 #pragma vector aligned
   for (unsigned int i = 0; i < n; i++) {
-    const float scale = y[i] * (1 + expf(-XW[i]));
+    const float scale = - 1/(1 + expf(-XW[i])) - y[i];
 #pragma vector aligned
     for (unsigned int j = 0; j < d; j++) {
       G[j] += scale * X[i * X_lda + j];

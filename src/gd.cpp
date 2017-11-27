@@ -263,6 +263,7 @@ gd_losses_t sgd
                                  batch_ys_oh, ys_oh_lda,
                                  batch_size, d, c, 1, lambda, scratch);
     } else {
+      memset(G, 0, d * sizeof(float));
       logistic_gradient_batch(G, W, batch_X, X_lda,
                               batch_ys_idx,
                               batch_size, d, lambda, scratch);
@@ -283,7 +284,6 @@ gd_losses_t sgd
         W[j * W_lda + k] -= alpha_t * m_m[j * W_lda + k] / (sqrtf(m_v[j * W_lda + k]) + 1e-8);
       }
     }
-
 #pragma omp critical
     grad_timer.end_timing_round(batch_size);
 

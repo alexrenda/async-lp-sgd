@@ -7,9 +7,9 @@
 #if DATA_TYPE == RANDOM
 
 float *data_W_true;
-const int data_n_train = 1000;
-const int data_n_test  = 100;
-const int data_d = 100;
+const int data_n_train = 1000000;
+const int data_n_test  = 1000;
+const int data_d = 10;
 
 const int data_W_seed = 1239013;
 const int data_train_seed = 943851;
@@ -39,7 +39,7 @@ dataset_t data_get_dataset(const int n, const int seed) {
       dot_res += data_W_true[j] * datum;
       res.image[i * data_d + j] = datum;
     }
-    float p = 1 / (1 + expf(-dot_res));
+    float p = 1 / (1 + expf(-dot_res)) + data_normal_dist(gen) / 5;
     if (data_uniform_dist(gen) < p) {
       res.labels_oh[i * 2] = 0;
       res.labels_oh[i * 2 + 1] = 1;
