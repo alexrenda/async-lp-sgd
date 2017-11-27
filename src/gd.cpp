@@ -179,7 +179,7 @@ gd_losses_t sgd
   timing_t grad_timer = timing_t();
 
 #ifdef PROGRESS
-  fprintf(stderr, "#/# ITERATION | TRAIN LOSS | TRAIN ERR | NORM | TEST ERR | WC TIME\n");
+  fprintf(stderr, "#ITER | TRAIN LOSS | TRAIN ERR | NORM | ALPHA \n");
   fflush(stderr);
 #endif /* PROGRESS */
 
@@ -190,14 +190,12 @@ gd_losses_t sgd
 #pragma omp critical
     grad_timer.start_timing_round();
 
-    int m_t = ++t_all[tno];
-
 #ifdef ADAM_SHARED
     int t_exp = ++t;
     float* __restrict__ m_m = m;
     float* __restrict__ m_v = v;
 #else
-    float t_exp = m_t;
+    float t_exp = ++t_all[tno];
     float* __restrict__ m_m = &m_all[c * W_lda * tno];
     float* __restrict__ m_v = &v_all[c * W_lda * tno];
 #endif /* ADAM_SHARED */
@@ -206,7 +204,7 @@ gd_losses_t sgd
 
     float beta_1_t = powf(beta_1, t_exp);
     float beta_2_t = powf(beta_2, t_exp);
-    float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(m_t);
+    float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(t_exp);
 
     float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
     __assume_aligned(scratch, ALIGNMENT);
@@ -314,11 +312,10 @@ gd_losses_t sgd
       unsigned int it = losses.times.size();
 
       fprintf(stderr,
-              "%6d %6d | %10.2f | %9.3f | %4.2f | %8.3f | %7.3f\r",
-              it % niter, niter,
+              "%5d | %10.2f | %9.3f | %4.2f | %5.5f\r",
+              it % niter,
               losses.train_losses.back(), losses.train_errors.back(),
-              losses.grad_sizes.back(),losses.test_errors.back(),
-              grad_timer.total_time()
+              losses.grad_sizes.back(), alpha_t
               );
       if (it % (niter / 10) == 0) {
         fprintf(stderr, "\n");
