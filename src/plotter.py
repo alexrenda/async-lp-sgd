@@ -4,52 +4,78 @@ from matplotlib import pyplot as plt
 import numpy as np
 import sys
 import fileinput
+import collections
+import os
+
+figures = [
+    'Gradient size vs iteration count',
+    'Gradient size vs wall clock time',
+    'Training loss vs iteration count',
+    'Training loss vs wall clock time',
+    'Errors vs iteration count',
+    'Errors vs wall clock time',
+]
 
 def main():
-    iterations = []
-    fields = []
-    for i, line in enumerate(fileinput.input()):
-        iterations.append(i)
-        fields.append(map(float, line.split()))
+    itcounts = collections.defaultdict(int)
+    iterations = collections.defaultdict(list)
+    fields = collections.defaultdict(list)
 
-    iterations = np.array(iterations)
-    vals = list(map(np.array, zip(*fields)))
+    for line in fileinput.input():
+        fname = fileinput.filename()
+        itcounts[fname] += 1
+        i = itcounts[fname]
 
-    times, grad_sizes = vals[:2]
+        iterations[fname].append(i)
+        fields[fname].append(map(float, line.split()))
 
-    plt.figure()
-    plt.title('Gradient size vs iteration count')
-    plt.semilogy(iterations, grad_sizes, label='Gradient norm')
-    plt.legend()
+    all_iterations = {f: np.array(iters) for (f, iters) in iterations.items()}
+    all_vals = {f: list(map(np.array, zip(*fs))) for (f, fs) in fields.items()}
 
-    plt.figure()
-    plt.title('Gradient size vs wall clock time')
-    plt.semilogy(times, grad_sizes, label='Gradient norm')
-    plt.legend()
+    for figidx, title in enumerate(figures):
+        plt.figure(figidx)
+        plt.title(title)
 
-    if len(vals) > 2:
-        train_losses, train_errors, test_errors = vals[2:]
+    for fname in all_iterations:
+        iterations = all_iterations[fname]
+        vals = all_vals[fname]
+        lname = os.path.basename(fname)
 
-        plt.figure()
-        plt.title('Training loss vs iteration count')
-        plt.semilogy(iterations, train_losses, label='Training loss')
-        plt.legend()
+        times = vals[0]
 
-        plt.figure()
-        plt.title('Errors vs iteration count')
-        plt.plot(iterations, train_errors, label='Training error')
-        plt.plot(iterations, test_errors, label='Testing error')
-        plt.legend()
+        try:
+            grad_sizes = vals[1]
 
-        plt.figure()
-        plt.title('Training loss vs wall clock time')
-        plt.semilogy(times, train_losses, label='Training loss')
-        plt.legend()
+            plt.figure(0)
+            plt.semilogy(iterations, grad_sizes, label='{} gradient norm'.format(lname))
 
-        plt.figure()
-        plt.title('Errors vs wall clock time')
-        plt.plot(times, train_errors, label='Training error')
-        plt.plot(times, test_errors, label='Testing error')
+            plt.figure(1)
+            plt.semilogy(times, grad_sizes, label='{} gradient norm'.format(lname))
+
+
+            train_losses = vals[2]
+
+            plt.figure(2)
+            plt.semilogy(iterations, train_losses, label='{} training loss'.format(lname))
+            plt.figure(3)
+            plt.semilogy(times, train_losses, label='{} training loss'.format(lname))
+
+
+            train_errors = vals[3]
+            test_errors = vals[4]
+
+            plt.figure(4)
+            plt.plot(iterations, train_errors, label='{} training error'.format(lname))
+            plt.plot(iterations, test_errors, label='{} testing error'.format(lname))
+
+            plt.figure(5)
+            plt.plot(times, train_errors, label='{} training error'.format(lname))
+            plt.plot(times, test_errors, label='{} testing error'.format(lname))
+        except:
+            continue
+
+    for figidx, title in enumerate(figures):
+        plt.figure(figidx)
         plt.legend()
 
     plt.show()
