@@ -102,12 +102,16 @@ void multinomial_gradient_batch
  ) {
   float *XWT   /* n x c */ = scratch;
   const size_t XWT_lda = ALIGN_ABOVE(c);
+  float *G_tmp   /* c x d */ = XWT + n * XWT_lda;
 
   __assume_aligned(XWT, ALIGNMENT);
+  __assume_aligned(G_tmp, ALIGNMENT);
   __assume_aligned(G, ALIGNMENT);
   __assume_aligned(W, ALIGNMENT);
   __assume_aligned(X, ALIGNMENT);
   __assume_aligned(y_oh, ALIGNMENT);
+
+  memset(G_tmp, 0, c * WG_lda);
 
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
               n, c, d,
@@ -124,15 +128,16 @@ void multinomial_gradient_batch
     float sum = cblas_sasum(c, Wx, 1);
 
     SAXPBY(c, -1, &y_oh[i * ys_lda], 1, (1 / sum), Wx, 1);
-    cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G, WG_lda);
+    cblas_sger(CblasRowMajor, c, d, 1, Wx, 1, x, 1, G_tmp, WG_lda);
   }
 
   for (unsigned int k = 0; k < c; k++) {
     float *Gk = &G[k * WG_lda];
     const float *Wk = &W[k * WG_lda];
+    float *Gk_tmp = &G_tmp[k * WG_lda];
 
     for (unsigned int j = 0; j < d; j++) {
-      Gk[j] = scale * (Gk[j] / n + lambda * Wk[j]);
+      Gk[j] = scale * (Gk_tmp[j] / n + lambda * Wk[j]);
     }
   }
 }
