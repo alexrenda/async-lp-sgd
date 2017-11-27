@@ -94,6 +94,12 @@ gd_losses_t sgd
   float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
   __assume_aligned(G_all, ALIGNMENT);
 
+  // timing
+  unsigned int* __restrict__ t_all = (unsigned int*) ALIGNED_MALLOC(omp_get_max_threads() * sizeof(unsigned int));
+  __assume_aligned(t_all, ALIGNMENT);
+  memset(t_all, 0, omp_get_max_threads() * sizeof(unsigned int));
+
+
 #ifdef ADAM_SHARED
   std::atomic<unsigned int> t = 0;
 
@@ -104,9 +110,6 @@ gd_losses_t sgd
   __assume_aligned(v, ALIGNMENT);
   memset(v, 0, c * W_lda * sizeof(float));
 #else
-  unsigned int* __restrict__ t_all = (unsigned int*) ALIGNED_MALLOC(omp_get_max_threads() * sizeof(unsigned int));
-  __assume_aligned(t_all, ALIGNMENT);
-  memset(t_all, 0, omp_get_max_threads() * sizeof(unsigned int));
   float* __restrict__ m_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
   __assume_aligned(m_all, ALIGNMENT);
   memset(m_all, 0, c * W_lda * omp_get_max_threads() * sizeof(float));
@@ -187,20 +190,23 @@ gd_losses_t sgd
 #pragma omp critical
     grad_timer.start_timing_round();
 
+    int m_t = ++t_all[tno];
+
 #ifdef ADAM_SHARED
-    int m_t = ++t;
+    int t_exp = ++t;
     float* __restrict__ m_m = m;
     float* __restrict__ m_v = v;
 #else
-    int m_t = ++t_all[tno];
+    float t_exp = m_t;
     float* __restrict__ m_m = &m_all[c * W_lda * tno];
     float* __restrict__ m_v = &v_all[c * W_lda * tno];
 #endif /* ADAM_SHARED */
     __assume_aligned(m_m, ALIGNMENT);
     __assume_aligned(m_v, ALIGNMENT);
 
-    float beta_1_t = powf(beta_1, m_t);
-    float beta_2_t = powf(beta_2, m_t);
+    float beta_1_t = powf(beta_1, t_exp);
+    float beta_2_t = powf(beta_2, t_exp);
+    float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(m_t);
 
     float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
     __assume_aligned(scratch, ALIGNMENT);
@@ -235,7 +241,6 @@ gd_losses_t sgd
                                batch_ys, ys_oh_lda,
                                batch_size, d, c, 1, lambda, scratch);
 
-    float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(m_t);
     // TODO vectorize
     for (unsigned int j = 0; j < c; j++) {
 #pragma vector aligned
@@ -372,12 +377,12 @@ gd_losses_t sgd
   ALIGNED_FREE(batch_idx);
   ALIGNED_FREE(batch_X);
   ALIGNED_FREE(batch_ys);
+  ALIGNED_FREE(t_all);
 
 #ifdef ADAM_SHARED
   ALIGNED_FREE(m);
   ALIGNED_FREE(v);
 #else
-  ALIGNED_FREE(t_all);
   ALIGNED_FREE(m_all);
   ALIGNED_FREE(v_all);
 #endif /* ADAM_SHARED */
