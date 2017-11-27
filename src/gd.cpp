@@ -238,7 +238,7 @@ gd_losses_t sgd
     float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t);
     // TODO vectorize
     for (unsigned int j = 0; j < c; j++) {
-      // #pragma vector aligned
+#pragma vector aligned
       for (unsigned int k = 0; k < d; k++) {
         if (abs(G[j * W_lda + k]) > 0) {
           m_m[j * W_lda + k] =
