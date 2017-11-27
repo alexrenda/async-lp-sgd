@@ -45,4 +45,29 @@ void multinomial_gradient_batch
  float* __restrict__ scratch    // scratch space
  );
 
+loss_t logistic_loss
+(
+ const float* __restrict__ W, // d x 1
+ const float* __restrict__ X, // n x d
+ const size_t X_lda,          // lda (axis 1 stride) of X
+ const unsigned int* __restrict__ y,  // n x 1
+ const size_t n,              // num training samples
+ const size_t d,              // data dimensionality
+ const float lambda,          // regularization parameter
+ float* __restrict__ scratch  // scratch space
+ );
+
+void logistic_gradient_batch
+(
+ float* __restrict__ G,       // d
+ const float* __restrict__ W, // d x 1
+ const float* __restrict__ X, // n x d
+ const size_t X_lda,          // lda (axis 1 stride) of X
+ const unsigned int* __restrict__ y,  // n x 1
+ const size_t n,              // num training samples
+ const size_t d,              // data dimensionality
+ const float lambda,          // regularization parameter
+ float* __restrict__ scratch  // scratch space
+ );
+
 #endif /* LOSS_H */

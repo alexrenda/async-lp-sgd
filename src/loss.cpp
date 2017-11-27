@@ -144,3 +144,88 @@ void multinomial_gradient_batch
     }
   }
 }
+
+loss_t logistic_loss
+(
+ const float* __restrict__ W, // d x 1
+ const float* __restrict__ X, // n x d
+ const size_t X_lda,          // lda (axis 1 stride) of X
+ const unsigned int* __restrict__ y,  // n x 1
+ const size_t n,              // num training samples
+ const size_t d,              // data dimensionality
+ const float lambda,          // regularization parameter
+ float* __restrict__ scratch  // scratch space
+ ) {
+  float *XW   /* n */ = scratch;
+
+  __assume_aligned(XW, ALIGNMENT);
+  __assume_aligned(W, ALIGNMENT);
+  __assume_aligned(X, ALIGNMENT);
+  __assume_aligned(y, ALIGNMENT);
+
+  cblas_sgemv(CblasRowMajor, CblasNoTrans,
+              n, d,
+              1, X, X_lda, W, 1,
+              0, XW, 1);
+
+  float loss = 0;
+  unsigned int correct = 0;
+
+#pragma vector aligned
+  for (unsigned int i = 0; i < n; i++) {
+    loss += logf(1 + expf(- y[i] * XW[i]));
+    correct += (y[i] * XW[i]) > 0;
+  }
+
+  float reg = 0;
+#pragma vector aligned
+  for (unsigned int j = 0; j < d; j++) {
+    reg += W[j];
+  }
+
+  loss_t ret;
+  ret.loss = loss / n + 2 * lambda * reg;
+  ret.error = 1 - ((float)correct) / n;
+
+  return ret;
+}
+
+
+void logistic_gradient_batch
+(
+ float* __restrict__ G,       // d
+ const float* __restrict__ W, // d x 1
+ const float* __restrict__ X, // n x d
+ const size_t X_lda,          // lda (axis 1 stride) of X
+ const unsigned int* __restrict__ y,  // n x 1
+ const size_t n,              // num training samples
+ const size_t d,              // data dimensionality
+ const float lambda,          // regularization parameter
+ float* __restrict__ scratch  // scratch space
+ ) {
+  float *XW   /* n */ = scratch;
+
+  __assume_aligned(XW, ALIGNMENT);
+  __assume_aligned(W, ALIGNMENT);
+  __assume_aligned(X, ALIGNMENT);
+  __assume_aligned(y, ALIGNMENT);
+
+  cblas_sgemv(CblasRowMajor, CblasNoTrans,
+              n, d,
+              1, X, X_lda, W, 1,
+              0, XW, 1);
+
+#pragma vector aligned
+  for (unsigned int i = 0; i < n; i++) {
+    const float scale = y[i] * (1 + expf(-XW[i]));
+#pragma vector aligned
+    for (unsigned int j = 0; j < d; j++) {
+      G[j] += scale * X[i * X_lda + j];
+    }
+  }
+
+#pragma vector aligned
+  for (unsigned int j = 0; j < d; j++) {
+    G[j] = G[j] / n + lambda * W[j];
+  }
+}
