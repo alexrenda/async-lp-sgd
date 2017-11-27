@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "mnist.hpp"
+#include "data.hpp"
+
+#if DATA_TYPE == MNIST
 
 #define NAME_TRAIN_FILE_IMAGE "../data/train-images-idx3-ubyte"
 #define NAME_TRAIN_FILE_LABEL "../data/train-labels-idx1-ubyte"
@@ -69,3 +71,5 @@ dataset_t get_test_dataset() {
                      NAME_TEST_FILE_LABEL,
                      SIZE_TEST_FILE_LABEL);
 }
+
+#endif /* DATA_TYPE */

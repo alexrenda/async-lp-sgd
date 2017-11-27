@@ -6,10 +6,12 @@
 #include <functional>
 #include <cassert>
 
-#include "mnist.hpp"
+#include "data.hpp"
 #include "gd.hpp"
 
 int main() {
+  init_data();
+
   dataset_t train = get_train_dataset();
   dataset_t test = get_test_dataset();
   assert(train.dim == test.dim);
@@ -20,12 +22,12 @@ int main() {
 
   const unsigned int n_train = train.n;
   float *X_train = train.image.data();
-  unsigned int *ys_idx_train = train.labels_idx.data();
+  int *ys_idx_train = train.labels_idx.data();
   float *ys_oh_train = train.labels_oh.data();
 
   const unsigned int n_test = test.n;
   float *X_test = test.image.data();
-  unsigned int *ys_idx_test = test.labels_idx.data();
+  int *ys_idx_test = test.labels_idx.data();
   float *ys_oh_test = test.labels_oh.data();
 
   const unsigned int niter = n_train * 10;
