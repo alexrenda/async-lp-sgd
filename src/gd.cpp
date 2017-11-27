@@ -204,7 +204,8 @@ gd_losses_t sgd
 
     float beta_1_t = powf(beta_1, t_exp);
     float beta_2_t = powf(beta_2, t_exp);
-    float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(t_exp);
+
+    float alpha_t = (alpha / omp_get_max_threads()) * sqrtf(1 - beta_2_t) / (1 - beta_1_t);
 
     float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
     __assume_aligned(scratch, ALIGNMENT);
