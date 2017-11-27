@@ -35,7 +35,7 @@ int main() {
 
   gd_losses_t losses = sgd(X_train, ys_idx_train, ys_oh_train, n_train,
                            X_test, ys_idx_test, ys_oh_test, n_test,
-                           d, c, 10, niter, 0.0001, 0,
+                           d, c, 10, niter, 0.0001, 1,
                            16, 1234);
 
   size_t n_losses = losses.times.size();

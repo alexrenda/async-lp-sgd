@@ -168,7 +168,7 @@ gd_losses_t sgd
                                ys_oh_train, ys_oh_lda,
                                n_train, d, c, 1, lambda, scratch_all);
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(guided)
     for (unsigned int _iter = 0; _iter < niter; _iter++) {
       unsigned int tno = omp_get_thread_num();
       float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
