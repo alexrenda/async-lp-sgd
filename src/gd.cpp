@@ -44,6 +44,8 @@ gd_losses_t sgd
   const size_t W_lda = ALIGN_ABOVE(d);
   assert(W_lda % ALIGNMENT == 0);
   __assume(W_lda % ALIGNMENT == 0);
+  assert(W_lda >= d);
+  __assume(W_lda >= d);
   const size_t X_lda = ALIGN_ABOVE(d);
   assert(X_lda % ALIGNMENT == 0);
   __assume(X_lda % ALIGNMENT == 0);
@@ -120,9 +122,12 @@ gd_losses_t sgd
   }
 
   // initialize weight vector
+#pragma vector aligned
   for (unsigned int j = 0; j < c; j++) {
+    float* __restrict__ Wj = &W[j * W_lda];
+
     for (unsigned int k = 0; k < d; k++) {
-      W[j * W_lda + k] = normal_dist(gen);
+      Wj[k] = normal_dist(gen);
     }
   }
 
@@ -141,8 +146,10 @@ gd_losses_t sgd
                              n_train, d, c, 1, lambda, scratch_all);
 
   float nrm = 0;
-  for (unsigned int k = 0 ; k < c; k++) {
-    nrm += cblas_snrm2(d, &G_all[k * W_lda], 1);
+#pragma vector aligned
+  for (unsigned int k = 0; k < c; k++) {
+    float* __restrict__ G_all_k = &G_all[k * W_lda];
+    nrm += cblas_snrm2(d, G_all_k, 1);
   }
   nrm /= c;
   losses.grad_sizes.push_back(nrm);
@@ -158,6 +165,7 @@ gd_losses_t sgd
   for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
 
     for (unsigned int j = 0; j < c; j++) {
+#pragma vector aligned
       for (unsigned int k = 0; k < d; k++) {
         W_tilde[j * W_lda + k] = W[j * W_lda + k];
       }
@@ -181,6 +189,7 @@ gd_losses_t sgd
       grad_timer.start_timing_round();
 
       for (unsigned int j = 0; j < c; j++) {
+#pragma vector aligned
         for (unsigned int k = 0; k < d; k++) {
           G[j * W_lda + k] = mu_tilde[j * W_lda + k];
         }
@@ -217,7 +226,17 @@ gd_losses_t sgd
                                  batch_ys, ys_oh_lda,
                                  batch_size, d, c, 1, lambda, scratch);
 
-      SAXPBY(c * W_lda, -alpha, G, 1, 1, W, 1);
+
+#pragma vector aligned
+      for (unsigned int j = 0; j < c; j++) {
+        float* __restrict__ Wj = &W[j * W_lda];
+        float* __restrict__ Gj = &G[j * W_lda];
+
+#pragma vector aligned
+        for (unsigned int k = 0; k < d; k++) {
+          Wj[k] -= alpha * Gj[k];
+        }
+      }
 
 #pragma omp critical
       grad_timer.end_timing_round(batch_size);

@@ -72,6 +72,8 @@ loss_t multinomial_loss
   float reg = 0;
   for (unsigned int k = 0; k < c; k++) {
     const float *Wk = &W[k * W_lda];
+
+#pragma vector aligned
     for (unsigned int j = 0; j < d; j++) {
       reg += Wk[j];
     }
@@ -111,7 +113,7 @@ void multinomial_gradient_batch
   __assume_aligned(X, ALIGNMENT);
   __assume_aligned(y_oh, ALIGNMENT);
 
-  memset(G_tmp, 0, c * WG_lda);
+  memset(G_tmp, 0, c * WG_lda * sizeof(float));
 
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
               n, c, d,
@@ -136,6 +138,7 @@ void multinomial_gradient_batch
     const float *Wk = &W[k * WG_lda];
     float *Gk_tmp = &G_tmp[k * WG_lda];
 
+#pragma vector aligned
     for (unsigned int j = 0; j < d; j++) {
       Gk[j] = scale * (Gk_tmp[j] / n + lambda * Wk[j]);
     }
