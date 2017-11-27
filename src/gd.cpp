@@ -58,8 +58,6 @@ gd_losses_t sgd
 
   float* __restrict__ W = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
   __assume_aligned(W, ALIGNMENT);
-  float* __restrict__ W_tilde = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
-  __assume_aligned(W_tilde, ALIGNMENT);
 
   const float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
   __assume_aligned(X_train, ALIGNMENT);
@@ -93,6 +91,7 @@ gd_losses_t sgd
   // gradient
   float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
   __assume_aligned(G_all, ALIGNMENT);
+  memset(G_all, 0, c * W_lda * omp_get_max_threads() * sizeof(float));
 
   // timing
   unsigned int* __restrict__ t_all = (unsigned int*) ALIGNED_MALLOC(omp_get_max_threads() * sizeof(unsigned int));
@@ -122,8 +121,11 @@ gd_losses_t sgd
   float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
   __assume_aligned(batch_X, ALIGNMENT);
   // tmp array for holding one-hot batch ys
-  float *batch_ys = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * ys_oh_lda);
-  __assume_aligned(batch_ys, ALIGNMENT);
+  float *batch_ys_oh = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * ys_oh_lda);
+  __assume_aligned(batch_ys_oh, ALIGNMENT);
+  // tmp array for holding idx batch ys
+  unsigned int *batch_ys_idx = (unsigned int*) ALIGNED_MALLOC(sizeof(unsigned int) * batch_size);
+  __assume_aligned(batch_ys_idx, ALIGNMENT);
   // vector used for fisher-yates-esque batch selection w/out replacement
   unsigned int *batch_idx = (unsigned int*) ALIGNED_MALLOC(sizeof(unsigned int) * n_train);
   __assume_aligned(batch_idx, ALIGNMENT);
@@ -155,18 +157,37 @@ gd_losses_t sgd
   }
 
   losses.times.push_back(0);
-  loss_t loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                                 d, c, lambda, scratch_all);
+  loss_t loss;
+
+  if (c > 1) {
+    loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
+                            d, c, lambda, scratch_all);
+  } else {
+    loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
+                         d, lambda, scratch_all);
+  }
+
   losses.train_losses.push_back(loss.loss);
   losses.train_errors.push_back(loss.error);
 
-  loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                          d, c, lambda, scratch_all);
+  if (c > 1) {
+    loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
+                            d, c, lambda, scratch_all);
+  } else {
+    loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
+                         d, lambda, scratch_all);
+  }
+
   losses.test_errors.push_back(loss.error);
 
-  multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
-                             ys_oh_train, ys_oh_lda,
-                             n_train, d, c, 1, lambda, scratch_all);
+  if (c > 1) {
+    multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
+                               ys_oh_train, ys_oh_lda,
+                               n_train, d, c, 1, lambda, scratch_all);
+  } else {
+    logistic_gradient_batch(G_all, W, X_train, X_lda,
+                            ys_idx_train, n_train, d, lambda, scratch_all);
+  }
 
   float nrm = 0;
   for (unsigned int k = 0; k < c; k++) {
@@ -227,7 +248,8 @@ gd_losses_t sgd
         x_dst[j] = x_src[j];
       }
 
-      float *ys_dst = &batch_ys[bidx * ys_oh_lda];
+      batch_ys_idx[bidx] = ys_idx_train[idx];
+      float *ys_dst = &batch_ys_oh[bidx * ys_oh_lda];
       const float *ys_src = &ys_oh_train[idx * ys_oh_lda];
 
 #pragma vector aligned
@@ -236,9 +258,15 @@ gd_losses_t sgd
       }
     }
 
-    multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
-                               batch_ys, ys_oh_lda,
-                               batch_size, d, c, 1, lambda, scratch);
+    if (c > 1) {
+      multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
+                                 batch_ys_oh, ys_oh_lda,
+                                 batch_size, d, c, 1, lambda, scratch);
+    } else {
+      logistic_gradient_batch(G, W, batch_X, X_lda,
+                              batch_ys_idx,
+                              batch_size, d, lambda, scratch);
+    }
 
     // TODO vectorize
     for (unsigned int j = 0; j < c; j++) {
@@ -363,7 +391,6 @@ gd_losses_t sgd
   fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
 
   ALIGNED_FREE(W);
-  ALIGNED_FREE(W_tilde);
   ALIGNED_FREE((float*) X_train);
   ALIGNED_FREE((unsigned int*) ys_idx_train);
   ALIGNED_FREE((float*) ys_oh_train);
@@ -374,7 +401,8 @@ gd_losses_t sgd
   ALIGNED_FREE(G_all);
   ALIGNED_FREE(batch_idx);
   ALIGNED_FREE(batch_X);
-  ALIGNED_FREE(batch_ys);
+  ALIGNED_FREE(batch_ys_oh);
+  ALIGNED_FREE(batch_ys_idx);
   ALIGNED_FREE(t_all);
 
 #ifdef ADAM_SHARED
