@@ -157,16 +157,16 @@ gd_losses_t sgd
 
   for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
 
-  for (unsigned int j = 0; j < c; j++) {
-    for (unsigned int k = 0; k < d; k++) {
-      W_tilde[j * W_lda + k] = W[j * W_lda + k];
+    for (unsigned int j = 0; j < c; j++) {
+      for (unsigned int k = 0; k < d; k++) {
+        W_tilde[j * W_lda + k] = W[j * W_lda + k];
+      }
     }
-  }
 
-  memset(mu_tilde, 0, sizeof(float) * c * W_lda);
-  multinomial_gradient_batch(mu_tilde, W, W_lda, X_train, X_lda,
-                             ys_oh_train, ys_oh_lda,
-                             n_train, d, c, 1, lambda, scratch_all);
+    memset(mu_tilde, 0, sizeof(float) * c * W_lda);
+    multinomial_gradient_batch(mu_tilde, W, W_lda, X_train, X_lda,
+                               ys_oh_train, ys_oh_lda,
+                               n_train, d, c, 1, lambda, scratch_all);
 
 #pragma omp parallel for
     for (unsigned int _iter = 0; _iter < niter; _iter++) {
@@ -302,7 +302,7 @@ gd_losses_t sgd
 
   losses.times.push_back(grad_timer.total_time());
   loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                                 d, c, lambda, scratch_all);
+                          d, c, lambda, scratch_all);
   losses.train_losses.push_back(loss.loss);
   losses.train_errors.push_back(loss.error);
 
