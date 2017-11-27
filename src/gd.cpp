@@ -235,7 +235,7 @@ gd_losses_t sgd
                                batch_ys, ys_oh_lda,
                                batch_size, d, c, 1, lambda, scratch);
 
-    float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t);
+    float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(t);
     // TODO vectorize
     for (unsigned int j = 0; j < c; j++) {
 #pragma vector aligned

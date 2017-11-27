@@ -10,9 +10,6 @@
 #include "gd.hpp"
 
 int main() {
-  std::mt19937 gen(5);
-  std::normal_distribution<float> normal_dist(0, 1);
-
   dataset_t train = get_train_dataset();
   dataset_t test = get_test_dataset();
   assert(train.dim == test.dim);
@@ -35,7 +32,7 @@ int main() {
 
   gd_losses_t losses = sgd(X_train, ys_idx_train, ys_oh_train, n_train,
                            X_test, ys_idx_test, ys_oh_test, n_test,
-                           d, c, niter, 0.0001, 0.0, 0.9, 0.999,
+                           d, c, niter, 0.01, 0.01, 0.9, 0.999,
                            64, 1234);
 
   size_t n_losses = losses.times.size();
