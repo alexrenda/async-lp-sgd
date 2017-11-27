@@ -5,7 +5,8 @@
 #define PROGRESS
 #define LOSSES
 #define HOGWILD
-// #define RAW_OUTPUT
+#define RAW_OUTPUT
+// #define ADAM_SHARED
 
 #include <vector>
 
@@ -16,6 +17,7 @@ typedef struct gd_losses {
   std::vector<float> test_errors;
   std::vector<float> times;
 } gd_losses_t;
+
 
 gd_losses_t sgd
 (
@@ -29,11 +31,12 @@ gd_losses_t sgd
  const size_t n_test,           // num training samples
  const size_t d,                // data dimensionality
  const size_t c,                // num classes
- const unsigned int nepoch,      // number of epochs to run
- const unsigned int niter,      // number of iterations to run per epoch
+ const unsigned int niter,      // number of iterations to run
  const float alpha,             // step size
  const float lambda,            // regularization parameter
- const size_t batch_size,       // parameter of momentum
+ const float beta_1,            // ema parameter of 1st moment
+ const float beta_2,            // ema parameter of 2nd moment
+ const size_t batch_size,       // batch size
  const unsigned int seed        // random seed
  );
 
