@@ -75,7 +75,7 @@ loss_t multinomial_loss
 
 #pragma vector aligned
     for (unsigned int j = 0; j < d; j++) {
-      reg += Wk[j];
+      reg += Wk[j] * Wk[j];
     }
   }
 
