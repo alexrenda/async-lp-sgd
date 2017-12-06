@@ -203,8 +203,9 @@ gd_losses_t sgd
   nrm /= c;
   losses.grad_sizes.push_back(nrm);
 
-  timing_t loss_timer = timing_t();
-  timing_t grad_timer = timing_t();
+  timing_t full_timer = timing_t();
+  full_timer.start_timing_round();
+
 
 #ifdef PROGRESS
   fprintf(stderr, "#ITER | TRAIN LOSS | TRAIN ERR | NORM | DIST TO OPT | ALPHA \n");
@@ -214,9 +215,6 @@ gd_losses_t sgd
 #pragma omp parallel for schedule(guided)
   for (unsigned int _iter = 0; _iter < niter; _iter++) {
     unsigned int tno = omp_get_thread_num();
-
-#pragma omp critical
-    grad_timer.start_timing_round();
 
 #ifdef ADAM_SHARED
     int t_exp = ++t;
@@ -286,9 +284,6 @@ gd_losses_t sgd
         W[j * W_lda + k] -= alpha_t * m_m[j * W_lda + k] / (sqrtf(m_v[j * W_lda + k]) + 1e-8);
       }
     }
-#pragma omp critical
-    grad_timer.end_timing_round(batch_size);
-
 
     nrm = 0;
     for (unsigned int k = 0 ; k < c; k++) {
@@ -306,13 +301,6 @@ gd_losses_t sgd
       dto += sqrtf(m_dto);
     }
     dto /= c;
-
-
-#pragma omp critical
-    {
-      losses.times.push_back(grad_timer.total_time());
-      losses.grad_sizes.push_back(nrm);
-    }
 
 #ifdef LOSSES
     loss_timer.start_timing_round();
@@ -346,7 +334,7 @@ gd_losses_t sgd
 #else
            "%f %f %f\n",
 #endif /* LOSSES */
-           grad_timer.total_time(),
+           full_timer.total_time(),
            nrm,
            dto
 #ifdef LOSSES
@@ -381,12 +369,7 @@ gd_losses_t sgd
   fprintf(stderr, "\n");
 #endif /* PROGRESS */
 
-  fprintf(stderr, "Grad time per step: %f\n", grad_timer.time_per_step());
-  fprintf(stderr, "Loss time per step: %f\n", loss_timer.time_per_step());
-
-
-
-  losses.times.push_back(grad_timer.total_time());
+  losses.times.push_back(full_timer.total_time());
 
 
   if (c > 1) {
