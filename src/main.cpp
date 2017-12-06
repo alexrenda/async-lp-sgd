@@ -21,21 +21,21 @@ int main() {
   const unsigned int c = train.num_labels;
 
   const unsigned int n_train = train.n;
-  float *X_train = train.image.data();
-  int *ys_idx_train = train.labels_idx.data();
-  float *ys_oh_train = train.labels_oh.data();
+  float *X_train = train.image;
+  int *ys_idx_train = train.labels_idx;
+  float *ys_oh_train = train.labels_oh;
 
   const unsigned int n_test = test.n;
-  float *X_test = test.image.data();
-  int *ys_idx_test = test.labels_idx.data();
-  float *ys_oh_test = test.labels_oh.data();
+  float *X_test = test.image;
+  int *ys_idx_test = test.labels_idx;
+  float *ys_oh_test = test.labels_oh;
 
-  const unsigned int niter = 10000;
+  const unsigned int niter = 1000000;
 
   gd_losses_t losses = sgd(X_train, ys_idx_train, ys_oh_train, n_train,
-                           X_test, ys_idx_test, ys_oh_test, n_test,
-                           d, c, niter, 0.001, 1, 0.9, 0.999,
-                           64, 1234);
+                           X_test, ys_idx_test, ys_oh_test, train.w_opt,
+                           n_test, d, c, niter, .0001, 1, 0.9, 0.999,
+                           32, 1234);
 
   size_t n_losses = losses.times.size();
 
