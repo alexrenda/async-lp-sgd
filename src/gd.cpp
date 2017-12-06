@@ -122,7 +122,7 @@ gd_losses_t sgd
   }
 
   // initialize weight vector
-#pragma vector aligned
+  #pragma vector aligned
   for (unsigned int j = 0; j < c; j++) {
     float* __restrict__ Wj = &W[j * W_lda];
 
@@ -146,7 +146,7 @@ gd_losses_t sgd
                              n_train, d, c, 1, lambda, scratch_all);
 
   float nrm = 0;
-#pragma vector aligned
+  #pragma vector aligned
   for (unsigned int k = 0; k < c; k++) {
     float* __restrict__ G_all_k = &G_all[k * W_lda];
     nrm += cblas_snrm2(d, G_all_k, 1);
@@ -165,7 +165,7 @@ gd_losses_t sgd
   for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
 
     for (unsigned int j = 0; j < c; j++) {
-#pragma vector aligned
+      #pragma vector aligned
       for (unsigned int k = 0; k < d; k++) {
         W_tilde[j * W_lda + k] = W[j * W_lda + k];
       }
@@ -176,7 +176,7 @@ gd_losses_t sgd
                                ys_oh_train, ys_oh_lda,
                                n_train, d, c, 1, lambda, scratch_all);
 
-#pragma omp parallel for schedule(guided)
+    #pragma omp parallel for schedule(guided)
     for (unsigned int _iter = 0; _iter < niter; _iter++) {
       unsigned int tno = omp_get_thread_num();
       float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
@@ -185,11 +185,11 @@ gd_losses_t sgd
       float* __restrict__ G = &G_all[c * W_lda * tno];
       __assume_aligned(G, ALIGNMENT);
 
-#pragma omp critical
+      #pragma omp critical
       grad_timer.start_timing_round();
 
       for (unsigned int j = 0; j < c; j++) {
-#pragma vector aligned
+        #pragma vector aligned
         for (unsigned int k = 0; k < d; k++) {
           G[j * W_lda + k] = mu_tilde[j * W_lda + k];
         }
@@ -204,7 +204,7 @@ gd_losses_t sgd
         float *x_dst = &batch_X[bidx * X_lda];
         const float *x_src = &X_train[idx * X_lda];
 
-#pragma vector aligned
+        #pragma vector aligned
         for (unsigned int j = 0; j < d; j++) {
           x_dst[j] = x_src[j];
         }
@@ -212,7 +212,7 @@ gd_losses_t sgd
         float *ys_dst = &batch_ys[bidx * ys_oh_lda];
         const float *ys_src = &ys_oh_train[idx * ys_oh_lda];
 
-#pragma vector aligned
+        #pragma vector aligned
         for (unsigned int k = 0; k < c; k++) {
           ys_dst[k] = ys_src[k];
         }
@@ -227,18 +227,18 @@ gd_losses_t sgd
                                  batch_size, d, c, 1, lambda, scratch);
 
 
-#pragma vector aligned
+      #pragma vector aligned
       for (unsigned int j = 0; j < c; j++) {
         float* __restrict__ Wj = &W[j * W_lda];
         float* __restrict__ Gj = &G[j * W_lda];
 
-#pragma vector aligned
+        #pragma vector aligned
         for (unsigned int k = 0; k < d; k++) {
           Wj[k] -= alpha * Gj[k];
         }
       }
 
-#pragma omp critical
+      #pragma omp critical
       grad_timer.end_timing_round(batch_size);
 
 
@@ -248,7 +248,7 @@ gd_losses_t sgd
       }
       nrm /= c;
 
-#pragma omp critical
+      #pragma omp critical
       {
         losses.times.push_back(grad_timer.total_time());
         losses.grad_sizes.push_back(nrm);
@@ -262,7 +262,7 @@ gd_losses_t sgd
                                           n_test, d, c, lambda, scratch);
       loss_timer.end_timing_round(1);
 
-#pragma omp critical
+      #pragma omp critical
       {
         losses.train_losses.push_back(train_loss.loss);
         losses.train_errors.push_back(train_loss.error);
@@ -290,7 +290,7 @@ gd_losses_t sgd
 #endif  /* RAW_OUTPUT */
 
 #ifdef PROGRESS
-#pragma omp critical
+      #pragma omp critical
       {
         unsigned int it = losses.times.size();
 
