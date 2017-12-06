@@ -184,7 +184,7 @@ loss_t logistic_loss
   }
 
   loss_t ret;
-  ret.loss = loss / n + 2 * lambda * reg;
+  ret.loss = loss / n + lambda * reg / 2;
   ret.error = 1 - ((float)correct) / n;
 
   return ret;
@@ -217,7 +217,7 @@ void logistic_gradient_batch
 
 #pragma vector aligned
   for (unsigned int i = 0; i < n; i++) {
-    const float scale = - 1/(1 + expf(-XW[i])) - y[i];
+    const float scale = - y[i] / (1 + expf(y[i] * XW[i]));
 #pragma vector aligned
     for (unsigned int j = 0; j < d; j++) {
       G[j] += scale * X[i * X_lda + j];

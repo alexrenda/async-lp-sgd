@@ -10,6 +10,8 @@ import os
 figures = [
     'Gradient size vs iteration count',
     'Gradient size vs wall clock time',
+    'Distance to optimum vs iteration count',
+    'Distance to optimum vs wall clock time',
     'Training loss vs iteration count',
     'Training loss vs wall clock time',
     'Errors vs iteration count',
@@ -52,23 +54,31 @@ def main():
             plt.figure(1)
             plt.semilogy(times, grad_sizes, label='{} gradient norm'.format(lname))
 
-
-            train_losses = vals[2]
+            dist_to_opt = vals[2]
 
             plt.figure(2)
-            plt.semilogy(iterations, train_losses, label='{} training loss'.format(lname))
+            plt.semilogy(iterations, grad_sizes, label='{} distance to optimum'.format(lname))
+
             plt.figure(3)
+            plt.semilogy(times, grad_sizes, label='{} distance to optimum'.format(lname))
+
+
+            train_losses = vals[3]
+
+            plt.figure(4)
+            plt.semilogy(iterations, train_losses, label='{} training loss'.format(lname))
+            plt.figure(5)
             plt.semilogy(times, train_losses, label='{} training loss'.format(lname))
 
 
-            train_errors = vals[3]
-            test_errors = vals[4]
+            train_errors = vals[4]
+            test_errors = vals[5]
 
-            plt.figure(4)
+            plt.figure(6)
             plt.plot(iterations, train_errors, label='{} training error'.format(lname))
             plt.plot(iterations, test_errors, label='{} testing error'.format(lname))
 
-            plt.figure(5)
+            plt.figure(7)
             plt.plot(times, train_errors, label='{} training error'.format(lname))
             plt.plot(times, test_errors, label='{} testing error'.format(lname))
         except:
