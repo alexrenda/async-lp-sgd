@@ -32,9 +32,7 @@ gd_losses_t sgd
  const size_t batch_size,       // batch size
  const unsigned int seed        // random seed
  ) {
-#ifdef HOGWILD
-  // omp_set_num_threads(16);
-#else
+#ifndef HOGWILD
   omp_set_num_threads(1);
 #endif
 
@@ -50,11 +48,6 @@ gd_losses_t sgd
   std::uniform_int_distribution<unsigned int> uniform_dist(0, n_train-1);
   std::uniform_int_distribution<int> thread_dist(0, omp_get_max_threads() - 1);
 
-  const size_t W_lda = ALIGN_ABOVE(d);
-  assert(W_lda % ALIGNMENT == 0);
-  __assume(W_lda % ALIGNMENT == 0);
-  assert(W_lda >= d);
-  __assume(W_lda >= d);
   const size_t X_lda = ALIGN_ABOVE(d);
   assert(X_lda % ALIGNMENT == 0);
   __assume(X_lda % ALIGNMENT == 0);
@@ -62,19 +55,19 @@ gd_losses_t sgd
   assert(ys_oh_lda % ALIGNMENT == 0);
   __assume(ys_oh_lda % ALIGNMENT == 0);
 
-  float* __restrict__ W = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
+  float* __restrict__ W = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(W, ALIGNMENT);
 
-  const float* __restrict__ W_opt = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
+  const float* __restrict__ W_opt = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(W_opt, ALIGNMENT);
-  for (int k = 0; k < c; k++) {
-    memcpy((float*) &W_opt[k * W_lda], &W_opt_in[k * d], d * sizeof(float));
-  }
+  memcpy((float*) W_opt, W_opt_in, d * sizeof(float));
 
   const float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
   __assume_aligned(X_train, ALIGNMENT);
   for (int i = 0; i < n_train; i++) {
-    memcpy((float*) &X_train[i * X_lda], &X_train_in[i * d], d * sizeof(float));
+    for (int j = 0; j < d; j++) {
+      ((float*)X_train)[i * X_lda + j] = X_train_in[i * d + j];
+    }
   }
 
   const int* __restrict__ ys_idx_train = (int*) ALIGNED_MALLOC(n_train * sizeof(int));
@@ -101,30 +94,37 @@ gd_losses_t sgd
 
 
   // gradient
-  float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
+  float* __restrict__ G_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
   __assume_aligned(G_all, ALIGNMENT);
-  memset(G_all, 0, c * W_lda * omp_get_max_threads() * sizeof(float));
+  memset(G_all, 0, ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
+  for (int t = 0; t < omp_get_max_threads(); t++) {
+    for (int j = 0; j < d; j++) {
+      G_all[t * ALIGN_ABOVE(d) + j] = 0;
+    }
+  }
 
   // timing
   unsigned int* __restrict__ t_all = (unsigned int*) ALIGNED_MALLOC(omp_get_max_threads() * sizeof(unsigned int));
   __assume_aligned(t_all, ALIGNMENT);
-  memset(t_all, 1, omp_get_max_threads() * sizeof(unsigned int));
+  for (int t = 0; t < omp_get_max_threads(); t++) {
+    t_all[t] = 1;
+  }
 
 
 #ifdef ADAM_SHARED
-  float* __restrict__ m = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
-  memset(m, 0, c * W_lda * sizeof(float));
+  float* __restrict__ m = (float*) ALIGNED_MALLOC(d * sizeof(float));
+  memset(m, 0, d * sizeof(float));
   __assume_aligned(m, ALIGNMENT);
-  float* __restrict__ v = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
+  float* __restrict__ v = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(v, ALIGNMENT);
-  memset(v, 0, c * W_lda * sizeof(float));
+  memset(v, 0, d * sizeof(float));
 #else
-  float* __restrict__ m_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
+  float* __restrict__ m_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
   __assume_aligned(m_all, ALIGNMENT);
-  memset(m_all, 0, c * W_lda * omp_get_max_threads() * sizeof(float));
-  float* __restrict__ v_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
+  memset(m_all, 0, ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
+  float* __restrict__ v_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
   __assume_aligned(v_all, ALIGNMENT);
-  memset(v_all, 0, c * W_lda * omp_get_max_threads() * sizeof(float));
+  memset(v_all, 0, ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
 #endif /* ADAM_SHARED */
 
   // tmp array for holding batch X
@@ -161,51 +161,30 @@ gd_losses_t sgd
   }
 
   // initialize weight vector
-  for (unsigned int j = 0; j < c; j++) {
 #pragma vector aligned
-    for (unsigned int k = 0; k < d; k++) {
-      W[j * W_lda + k] = normal_dist(gen_main);
-    }
+  for (unsigned int j = 0; j < d; j++) {
+    W[j] = normal_dist(gen_main);
   }
 
   losses.times.push_back(0);
   loss_t loss;
 
-  if (c > 1) {
-    loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                            d, c, lambda, scratch_all);
-  } else {
-    loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
-                         d, lambda, scratch_all);
-  }
+  loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
+                       d, lambda, scratch_all);
 
   losses.train_losses.push_back(loss.loss);
   losses.train_errors.push_back(loss.error);
+  losses.train_pos.push_back(loss.pos);
 
-  if (c > 1) {
-    loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                            d, c, lambda, scratch_all);
-  } else {
-    loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
-                         d, lambda, scratch_all);
-  }
+  loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
+                       d, lambda, scratch_all);
 
   losses.test_errors.push_back(loss.error);
 
-  if (c > 1) {
-    multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
-                               ys_oh_train, ys_oh_lda,
-                               n_train, d, c, 1, lambda, scratch_all);
-  } else {
-    logistic_gradient_batch(G_all, W, X_train, X_lda,
-                            ys_idx_train, n_train, d, lambda, scratch_all);
-  }
+  logistic_gradient_batch(G_all, W, X_train, X_lda,
+                          ys_idx_train, n_train, d, lambda, scratch_all);
 
-  float nrm = 0;
-  for (unsigned int k = 0; k < c; k++) {
-    nrm += cblas_snrm2(d, &G_all[k * W_lda], 1);
-  }
-  nrm /= c;
+  float nrm = cblas_snrm2(d, G_all, 1);
   losses.grad_sizes.push_back(nrm);
 
   timing_t full_timer = timing_t();
@@ -213,25 +192,30 @@ gd_losses_t sgd
 
 
 #ifdef PROGRESS
-  fprintf(stderr, "#ITER | TRAIN LOSS | TRAIN ERR | NORM | DIST TO OPT | ALPHA \n");
+  fprintf(stderr, "#ITER | NORM | DIST TO OPT"
+#ifdef LOSS
+          "| TRAIN LOSS | TRAIN ERR"
+#endif /* LOSS */
+          "\n");
   fflush(stderr);
 #endif /* PROGRESS */
 
 #pragma omp parallel for schedule(guided)
   for (unsigned int _iter = 0; _iter < niter; _iter++) {
     unsigned int tno = omp_get_thread_num();
-    std::mt19937 gen = gen_all[tno];
 
-    float t_exp = t_all[tno]++;
+    const int m_t = t_all[tno]++;
 
+    float t_exp;
 #ifdef ADAM_SHARED
-    t_exp = t_exp * omp_get_max_threads() + thread_dist(gen);
+    t_exp = m_t * omp_get_max_threads() + thread_dist(gen_all[tno]);
 
     float* __restrict__ m_m = m;
     float* __restrict__ m_v = v;
 #else
-    float* __restrict__ m_m = &m_all[c * W_lda * tno];
-    float* __restrict__ m_v = &v_all[c * W_lda * tno];
+    t_exp = m_t;
+    float* __restrict__ m_m = &m_all[ALIGN_ABOVE(d) * tno];
+    float* __restrict__ m_v = &v_all[ALIGN_ABOVE(d) * tno];
 #endif /* ADAM_SHARED */
 
     __assume_aligned(m_m, ALIGNMENT);
@@ -245,14 +229,14 @@ gd_losses_t sgd
     float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
     __assume_aligned(scratch, ALIGNMENT);
 
-    float* __restrict__ G = &G_all[c * W_lda * tno];
+    float* __restrict__ G = &G_all[ALIGN_ABOVE(d) * tno];
     __assume_aligned(G, ALIGNMENT);
 
     unsigned int* __restrict__ batch_idx = &batch_idx_all[ALIGN_ABOVE(n_train) * tno];
     __assume_aligned(batch_idx, ALIGNMENT);
 
     for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
-      const unsigned int rand_idx = batch_dists[bidx](gen);
+      const unsigned int rand_idx = batch_dists[bidx](gen_all[tno]);
       const unsigned int idx = batch_idx[rand_idx];
       batch_idx[rand_idx] = batch_idx[n_train - 1 - bidx];
       batch_idx[n_train - 1 - bidx] = idx;
@@ -275,58 +259,36 @@ gd_losses_t sgd
       }
     }
 
-    if (c > 1) {
-      multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
-                                 batch_ys_oh, ys_oh_lda,
-                                 batch_size, d, c, 1, lambda, scratch);
-    } else {
-      memset(G, 0, d * sizeof(float));
-      logistic_gradient_batch(G, W, batch_X, X_lda,
-                              batch_ys_idx,
-                              batch_size, d, lambda, scratch);
-    }
+    memset(G, 0, d * sizeof(float));
+    logistic_gradient_batch(G, W, batch_X, X_lda,
+                            batch_ys_idx,
+                            batch_size, d, lambda, scratch);
 
-    // TODO vectorize
-    for (unsigned int j = 0; j < c; j++) {
+
 #pragma vector aligned
-      for (unsigned int k = 0; k < d; k++) {
-        m_m[j * W_lda + k] = beta_1 * m_m[j * W_lda + k] + (1 - beta_1) * G[j * W_lda + k];
-        m_v[j * W_lda + k] = beta_2 * m_v[j * W_lda + k] + (1 - beta_2) * G[j * W_lda + k] * G[j * W_lda + k];
+    for (unsigned int j = 0; j < d; j++) {
+      m_m[j] = beta_1 * m_m[j] + (1 - beta_1) * G[j];
+      m_v[j] = beta_2 * m_v[j] + (1 - beta_2) * G[j] * G[j];
 
-        W[j * W_lda + k] -= alpha_t * m_m[j * W_lda + k] / (sqrtf(m_v[j * W_lda + k]) + 1e-8);
-      }
+      W[j] -= alpha_t * m_m[j] / (sqrtf(m_v[j]) + 1e-8);
+      // W[j] -= alpha * G[j];
     }
 
-    nrm = 0;
-    for (unsigned int k = 0 ; k < c; k++) {
-      nrm += cblas_snrm2(d, &G[k * W_lda], 1);
-    }
-    nrm /= c;
+    nrm = cblas_snrm2(d, G, 1);
 
     float dto = 0;
-    for (unsigned int k = 0 ; k < c; k++) {
-      float m_dto = 0;
-      for (unsigned int j = 0; j < d; j++) {
-        float dst = W[k * W_lda + j] - W_opt[k * W_lda + j];
-        m_dto += dst * dst;
-      }
-      dto += sqrtf(m_dto);
+    for (unsigned int j = 0; j < d; j++) {
+      float dst = W[j] - W_opt[j];
+      dto += dst * dst;
     }
-    dto /= c;
+    dto = sqrtf(dto);
 
 #ifdef LOSSES
     loss_t train_loss, test_loss;
-    if (c > 1) {
-      train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                                    d, c, lambda, scratch);
-      test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                                    d, c, lambda, scratch);
-    } else {
-      train_loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
-                                    d, lambda, scratch);
-      test_loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
-                                    d, lambda, scratch);
-    }
+    train_loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
+                               d, lambda, scratch);
+    test_loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
+                              d, lambda, scratch);
 
 #endif /* LOSSES */
 
@@ -350,19 +312,20 @@ gd_losses_t sgd
 #endif  /* RAW_OUTPUT */
 
 #ifdef PROGRESS
-#pragma omp critical
-    {
-      unsigned int it = losses.times.size();
-
-      fprintf(stderr,
-              "%5d | %10.2f | %9.3f | %4.2f | %11.4f | %5.5f\r",
-              it % niter,
-              losses.train_losses.back(), losses.train_errors.back(),
-              losses.grad_sizes.back(), dto, alpha_t
-              );
-      if (it % (niter / 10) == 0) {
-        fprintf(stderr, "\n");
-      }
+    unsigned int it = m_t * omp_get_max_threads();
+    fprintf(stderr,
+            "%5d | %4.2f | %11.4f"
+#ifdef LOSSES
+            " | %10.2f | %9.3f"
+#endif /* LOSSES */
+            "\r",
+            it, nrm, dto
+#ifdef LOSSES
+            ,train_loss.loss, train_loss.error
+#endif /* LOSSES */
+            );
+    if (it % (niter / 10) == 0) {
+      fprintf(stderr, "\n");
     }
     fflush(stderr);
 #endif /* PROGRESS */
@@ -375,41 +338,21 @@ gd_losses_t sgd
   losses.times.push_back(full_timer.total_time());
 
 
-  if (c > 1) {
-    loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                            d, c, lambda, scratch_all);
-  } else {
-    loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
-                         d, lambda, scratch_all);
-  }
+  loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
+                       d, lambda, scratch_all);
 
   losses.train_losses.push_back(loss.loss);
   losses.train_errors.push_back(loss.error);
 
-  if (c > 1) {
-    loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                            d, c, lambda, scratch_all);
-  } else {
-    loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
-                         d, lambda, scratch_all);
-  }
+  loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
+                       d, lambda, scratch_all);
 
   losses.test_errors.push_back(loss.error);
 
-  if (c > 1) {
-    multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
-                               ys_oh_train, ys_oh_lda,
-                               n_train, d, c, 1, lambda, scratch_all);
-  } else {
-    logistic_gradient_batch(G_all, W, X_train, X_lda,
-                            ys_idx_train, n_train, d, lambda, scratch_all);
-  }
+  logistic_gradient_batch(G_all, W, X_train, X_lda,
+                          ys_idx_train, n_train, d, lambda, scratch_all);
 
-  nrm = 0;
-  for (unsigned int k = 0; k < c; k++) {
-    nrm += cblas_snrm2(d, &G_all[k * W_lda], 1);
-  }
-  nrm /= c;
+  nrm = cblas_snrm2(d, G_all, 1);
   losses.grad_sizes.push_back(nrm);
 
 

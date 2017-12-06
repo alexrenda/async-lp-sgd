@@ -12,6 +12,7 @@ scratch_size
 typedef struct loss_t {
   float loss;
   float error;
+  float pos;
 } loss_t;
 
 loss_t multinomial_loss

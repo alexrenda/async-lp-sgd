@@ -22,7 +22,7 @@ loss_t multinomial_loss
  const size_t W_lda,          // lda (axis 1 stride) of W
  const float* __restrict__ X, // n x d
  const size_t X_lda,          // lda (axis 1 stride) of X
- const int* __restrict__ y,  // n x 1
+ const int* __restrict__ y,   // n x 1
  const size_t n,              // num training samples
  const size_t d,              // data dimensionality
  const size_t c,              // num classes
@@ -88,19 +88,19 @@ loss_t multinomial_loss
 
 void multinomial_gradient_batch
 (
- float* __restrict__ G,       // c x d
- const float* __restrict__ W, // c x d
- const size_t WG_lda,         // lda (axis 1 stride) of W and G
- const float* __restrict__ X, // n x d data
- const size_t X_lda,          // lda (axis 1 stride) of X
- const float* __restrict__ y_oh,  // n x c classes
+ float* __restrict__ G,          // c x d
+ const float* __restrict__ W,    // c x d
+ const size_t WG_lda,            // lda (axis 1 stride) of W and G
+ const float* __restrict__ X,    // n x d data
+ const size_t X_lda,             // lda (axis 1 stride) of X
+ const float* __restrict__ y_oh, // n x c classes
  const size_t ys_lda,
- const size_t n,              // number of losses
- const size_t d,              // data dimensionality
- const size_t c,              // num classes
- const float scale,           // result scale factor
- const float lambda,          // regularization parameter
- float* __restrict__ scratch  // scratch space
+ const size_t n,                // number of losses
+ const size_t d,                // data dimensionality
+ const size_t c,                // num classes
+ const float scale,             // result scale factor
+ const float lambda,            // regularization parameter
+ float* __restrict__ scratch    // scratch space
  ) {
   float *XWT   /* n x c */ = scratch;
   const size_t XWT_lda = ALIGN_ABOVE(c);
@@ -170,10 +170,12 @@ loss_t logistic_loss
 
   float loss = 0;
   unsigned int correct = 0;
+  unsigned int pos = 0;
 
 #pragma vector aligned
   for (unsigned int i = 0; i < n; i++) {
     loss += logf(1 + expf(- y[i] * XW[i]));
+    pos += XW[i] > 0;
     correct += (y[i] * XW[i]) > 0;
   }
 
@@ -186,6 +188,7 @@ loss_t logistic_loss
   loss_t ret;
   ret.loss = loss / n + lambda * reg / 2;
   ret.error = 1 - ((float)correct) / n;
+  ret.pos = ((float)pos) / n;
 
   return ret;
 }

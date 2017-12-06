@@ -2,17 +2,18 @@
 #define GD_HPP
 
 
-// #define PROGRESS
-// #define LOSSES
+#define PROGRESS
+#define LOSSES
 // #define HOGWILD
 #define RAW_OUTPUT
-#define ADAM_SHARED
+// #define ADAM_SHARED
 
 #include <vector>
 
 typedef struct gd_losses {
   std::vector<float> train_losses;
   std::vector<float> train_errors;
+  std::vector<float> train_pos;
   std::vector<float> grad_sizes;
   std::vector<float> test_errors;
   std::vector<float> times;
