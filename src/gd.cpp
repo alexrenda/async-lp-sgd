@@ -41,7 +41,11 @@ gd_losses_t sgd
   gd_losses_t losses;
 
   // initialize randoms
-  std::mt19937 gen(seed);
+  std::mt19937 gen_main(seed);
+  std::vector<std::mt19937> gen_all;
+  for (int t = 0; t < omp_get_max_threads(); t++) {
+    gen_all.push_back(std::mt19937(seed + t));
+  }
   std::normal_distribution<float> normal_dist(0, 1);
   std::uniform_int_distribution<unsigned int> uniform_dist(0, n_train-1);
   std::uniform_int_distribution<int> thread_dist(0, omp_get_max_threads() - 1);
@@ -133,8 +137,8 @@ gd_losses_t sgd
   int *batch_ys_idx = (int*) ALIGNED_MALLOC(sizeof(int) * batch_size);
   __assume_aligned(batch_ys_idx, ALIGNMENT);
   // vector used for fisher-yates-esque batch selection w/out replacement
-  unsigned int *batch_idx = (unsigned int*) ALIGNED_MALLOC(sizeof(unsigned int) * n_train);
-  __assume_aligned(batch_idx, ALIGNMENT);
+  unsigned int *batch_idx_all = (unsigned int*) ALIGNED_MALLOC(sizeof(unsigned int) * ALIGN_ABOVE(n_train) * omp_get_max_threads());
+  __assume_aligned(batch_idx_all, ALIGNMENT);
 
   // collection of uniform distributions for batch selection
   std::vector< std::uniform_int_distribution<unsigned int> > batch_dists;
@@ -145,8 +149,10 @@ gd_losses_t sgd
   __assume_aligned(scratch_all, ALIGNMENT);
 
   // initialize the batch selection vector (invariant is that it's an unordered set)
-  for (unsigned int i = 0; i < n_train; i++) {
-    batch_idx[i] = i;
+  for (int t = 0; t < omp_get_max_threads(); t++) {
+    for (unsigned int i = 0; i < n_train; i++) {
+      batch_idx_all[t * ALIGN_ABOVE(n_train) + i] = i;
+    }
   }
 
   // initialize each distribution (this is ugly... TODO: any better way?)
@@ -158,7 +164,7 @@ gd_losses_t sgd
   for (unsigned int j = 0; j < c; j++) {
 #pragma vector aligned
     for (unsigned int k = 0; k < d; k++) {
-      W[j * W_lda + k] = normal_dist(gen);
+      W[j * W_lda + k] = normal_dist(gen_main);
     }
   }
 
@@ -214,6 +220,7 @@ gd_losses_t sgd
 #pragma omp parallel for schedule(guided)
   for (unsigned int _iter = 0; _iter < niter; _iter++) {
     unsigned int tno = omp_get_thread_num();
+    std::mt19937 gen = gen_all[tno];
 
     float t_exp = t_all[tno]++;
 
@@ -240,6 +247,9 @@ gd_losses_t sgd
 
     float* __restrict__ G = &G_all[c * W_lda * tno];
     __assume_aligned(G, ALIGNMENT);
+
+    unsigned int* __restrict__ batch_idx = &batch_idx_all[ALIGN_ABOVE(n_train) * tno];
+    __assume_aligned(batch_idx, ALIGNMENT);
 
     for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
       const unsigned int rand_idx = batch_dists[bidx](gen);
@@ -316,13 +326,6 @@ gd_losses_t sgd
                                     d, lambda, scratch);
       test_loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
                                     d, lambda, scratch);
-    }
-
-#pragma omp critical
-    {
-      losses.train_losses.push_back(train_loss.loss);
-      losses.train_errors.push_back(train_loss.error);
-      losses.test_errors.push_back(test_loss.error);
     }
 
 #endif /* LOSSES */
@@ -423,7 +426,7 @@ gd_losses_t sgd
   ALIGNED_FREE((float*) ys_oh_test);
   ALIGNED_FREE((float*) scratch_all);
   ALIGNED_FREE(G_all);
-  ALIGNED_FREE(batch_idx);
+  ALIGNED_FREE(batch_idx_all);
   ALIGNED_FREE(batch_X);
   ALIGNED_FREE(batch_ys_oh);
   ALIGNED_FREE(batch_ys_idx);
