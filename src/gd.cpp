@@ -44,6 +44,7 @@ gd_losses_t sgd
   std::mt19937 gen(seed);
   std::normal_distribution<float> normal_dist(0, 1);
   std::uniform_int_distribution<unsigned int> uniform_dist(0, n_train-1);
+  std::uniform_int_distribution<int> thread_dist(0, omp_get_max_threads() - 1);
 
   const size_t W_lda = ALIGN_ABOVE(d);
   assert(W_lda % ALIGNMENT == 0);
@@ -107,8 +108,6 @@ gd_losses_t sgd
 
 
 #ifdef ADAM_SHARED
-  std::atomic<unsigned int> t = 0;
-
   float* __restrict__ m = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
   memset(m, 0, c * W_lda * sizeof(float));
   __assume_aligned(m, ALIGNMENT);
@@ -216,12 +215,14 @@ gd_losses_t sgd
   for (unsigned int _iter = 0; _iter < niter; _iter++) {
     unsigned int tno = omp_get_thread_num();
 
+    float t_exp = t_all[tno]++;
+
 #ifdef ADAM_SHARED
-    int t_exp = ++t;
+    t_exp = t_exp * omp_get_max_threads() + thread_dist(gen);
+
     float* __restrict__ m_m = m;
     float* __restrict__ m_v = v;
 #else
-    float t_exp = ++t_all[tno];
     float* __restrict__ m_m = &m_all[c * W_lda * tno];
     float* __restrict__ m_v = &v_all[c * W_lda * tno];
 #endif /* ADAM_SHARED */
@@ -343,7 +344,7 @@ gd_losses_t sgd
            test_loss.error
 #endif /* LOSSES */
            );
-    fflush(stdout);
+    // fflush(stdout);
 #endif  /* RAW_OUTPUT */
 
 #ifdef PROGRESS
