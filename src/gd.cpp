@@ -104,7 +104,7 @@ gd_losses_t sgd
   // timing
   unsigned int* __restrict__ t_all = (unsigned int*) ALIGNED_MALLOC(omp_get_max_threads() * sizeof(unsigned int));
   __assume_aligned(t_all, ALIGNMENT);
-  memset(t_all, 0, omp_get_max_threads() * sizeof(unsigned int));
+  memset(t_all, 1, omp_get_max_threads() * sizeof(unsigned int));
 
 
 #ifdef ADAM_SHARED
@@ -226,6 +226,7 @@ gd_losses_t sgd
     float* __restrict__ m_m = &m_all[c * W_lda * tno];
     float* __restrict__ m_v = &v_all[c * W_lda * tno];
 #endif /* ADAM_SHARED */
+
     __assume_aligned(m_m, ALIGNMENT);
     __assume_aligned(m_v, ALIGNMENT);
 
@@ -304,7 +305,6 @@ gd_losses_t sgd
     dto /= c;
 
 #ifdef LOSSES
-    loss_timer.start_timing_round();
     loss_t train_loss, test_loss;
     if (c > 1) {
       train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
@@ -317,7 +317,6 @@ gd_losses_t sgd
       test_loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
                                     d, lambda, scratch);
     }
-    loss_timer.end_timing_round(1);
 
 #pragma omp critical
     {
