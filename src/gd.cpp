@@ -9,7 +9,7 @@
 #include "mblas.hpp"
 #include "timing.hpp"
 
-gd_losses_t sgd
+void sgd
 (
  const float* __restrict__ X_train_in,             // n x d
  const unsigned int* __restrict__ ys_idx_train_in, // n x 1
@@ -28,13 +28,11 @@ gd_losses_t sgd
  const size_t batch_size,       // batch size
  const unsigned int seed        // random seed
  ) {
-#ifdef HOGWILD
-  // omp_set_num_threads(16);
-#else
+#ifndef HOGWILD
   omp_set_num_threads(1);
 #endif
 
-  gd_losses_t losses;
+  // gd_losses_t losses;
 
   // initialize randoms
   std::mt19937 gen(seed);
@@ -131,37 +129,12 @@ gd_losses_t sgd
     }
   }
 
-  losses.times.push_back(0);
-  loss_t loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                                 d, c, lambda, scratch_all);
-  losses.train_losses.push_back(loss.loss);
-  losses.train_errors.push_back(loss.error);
-
-  loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                          d, c, lambda, scratch_all);
-  losses.test_errors.push_back(loss.error);
-
-  multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
-                             ys_oh_train, ys_oh_lda,
-                             n_train, d, c, 1, lambda, scratch_all);
-
-  float nrm = 0;
-  #pragma vector aligned
-  for (unsigned int k = 0; k < c; k++) {
-    float* __restrict__ G_all_k = &G_all[k * W_lda];
-    nrm += cblas_snrm2(d, G_all_k, 1);
-  }
-  nrm /= c;
-  losses.grad_sizes.push_back(nrm);
-
-  timing_t loss_timer = timing_t();
   timing_t grad_timer = timing_t();
 
-#ifdef PROGRESS
   fprintf(stderr, "#/# EPOCH | #/# ITERATION | TRAIN LOSS | TRAIN ERR | NORM | TEST ERR | WC TIME\n");
   fflush(stderr);
-#endif /* PROGRESS */
 
+  double start_time = omp_get_wtime();
   for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
 
     for (unsigned int j = 0; j < c; j++) {
@@ -176,6 +149,8 @@ gd_losses_t sgd
                                ys_oh_train, ys_oh_lda,
                                n_train, d, c, 1, lambda, scratch_all);
 
+    grad_timer.start_timing_round();
+
     #pragma omp parallel for schedule(guided)
     for (unsigned int _iter = 0; _iter < niter; _iter++) {
       unsigned int tno = omp_get_thread_num();
@@ -185,8 +160,7 @@ gd_losses_t sgd
       float* __restrict__ G = &G_all[c * W_lda * tno];
       __assume_aligned(G, ALIGNMENT);
 
-      #pragma omp critical
-      grad_timer.start_timing_round();
+      // #pragma omp critical
 
       for (unsigned int j = 0; j < c; j++) {
         #pragma vector aligned
@@ -237,114 +211,59 @@ gd_losses_t sgd
           Wj[k] -= alpha * Gj[k];
         }
       }
-
-      #pragma omp critical
-      grad_timer.end_timing_round(batch_size);
-
-
-      nrm = 0;
-      for (unsigned int k = 0 ; k < c; k++) {
-        nrm += cblas_snrm2(d, &G[k * W_lda], 1);
-      }
-      nrm /= c;
-
-      #pragma omp critical
-      {
-        losses.times.push_back(grad_timer.total_time());
-        losses.grad_sizes.push_back(nrm);
-      }
-
-#ifdef LOSSES
-      loss_timer.start_timing_round();
-      loss_t train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train,
-                                           n_train, d, c, lambda, scratch);
-      loss_t test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test,
-                                          n_test, d, c, lambda, scratch);
-      loss_timer.end_timing_round(1);
-
-      #pragma omp critical
-      {
-        losses.train_losses.push_back(train_loss.loss);
-        losses.train_errors.push_back(train_loss.error);
-        losses.test_errors.push_back(test_loss.error);
-      }
-
-#endif /* LOSSES */
-
-#ifdef RAW_OUTPUT
-      printf(
-#ifdef LOSSES
-             "%f %f %f %f %f\n",
-#else
-             "%f %f\n",
-#endif /* LOSSES */
-             grad_timer.total_time(),
-             nrm
-#ifdef LOSSES
-             , train_loss.loss,
-             train_loss.error,
-             test_loss.error
-#endif /* LOSSES */
-             );
-      fflush(stdout);
-#endif  /* RAW_OUTPUT */
-
-#ifdef PROGRESS
-      #pragma omp critical
-      {
-        unsigned int it = losses.times.size();
-
-        fprintf(stderr,
-                "%4d %4d | %6d %6d | %10.2f | %9.3f | %4.2f | %8.3f | %7.3f\r",
-                _epoch, nepoch, it % niter, niter,
-                losses.train_losses.back(), losses.train_errors.back(),
-                losses.grad_sizes.back(),losses.test_errors.back(),
-                grad_timer.total_time()
-                );
-        if (it % (niter / 10) == 0) {
-          fprintf(stderr, "\n");
-        }
-      }
-      fflush(stderr);
-#endif /* PROGRESS */
     }
+
+    grad_timer.end_timing_round(niter);
+
+    float* __restrict__ scratch = scratch_all;
+    __assume_aligned(scratch, ALIGNMENT);
+
+    loss_t train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train,
+                                         n_train, d, c, lambda, scratch);
+    loss_t test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test,
+                                        n_test, d, c, lambda, scratch);
+
+    float nrm = 0;
+    // for (unsigned int k = 0 ; k < c; k++) {
+    //   nrm += cblas_snrm2(d, &G[k * W_lda], 1);
+    // }
+    // nrm /= c;
+
+    printf(
+           "%f %f %f %f %f\n",
+           grad_timer.total_time(),
+           nrm,
+           train_loss.loss,
+           train_loss.error,
+           test_loss.error
+           );
+    fflush(stdout);
+
+    {
+      fprintf(stderr,
+              "%4d %4d | %6d %6d | %10.2f | %9.3f | %4.2f | %8.3f | %7.3f\n",
+              _epoch, nepoch, niter*(_epoch+1), niter,
+              train_loss.loss, train_loss.error,
+              nrm, test_loss.error,
+              grad_timer.total_time()
+              );
+    }
+    fflush(stderr);
   }
 
-#ifdef PROGRESS
   fprintf(stderr, "\n");
-#endif /* PROGRESS */
 
   fprintf(stderr, "Grad time per step: %f\n", grad_timer.time_per_step());
-  fprintf(stderr, "Loss time per step: %f\n", loss_timer.time_per_step());
 
+  auto train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
+                                     d, c, lambda, scratch_all);
 
+  auto test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
+                                    d, c, lambda, scratch_all);
 
-  losses.times.push_back(grad_timer.total_time());
-  loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
-                          d, c, lambda, scratch_all);
-  losses.train_losses.push_back(loss.loss);
-  losses.train_errors.push_back(loss.error);
-
-  loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
-                          d, c, lambda, scratch_all);
-  losses.test_errors.push_back(loss.error);
-
-  multinomial_gradient_batch(G_all, W, W_lda, X_train, X_lda,
-                             ys_oh_train, ys_oh_lda,
-                             n_train, d, c, 1, lambda, scratch_all);
-
-  nrm = 0;
-  for (unsigned int k = 0 ; k < c; k++) {
-    nrm += cblas_snrm2(d, &G_all[k * W_lda], 1);
-  }
-  nrm /= c;
-  losses.grad_sizes.push_back(nrm);
-
-
-
-  fprintf(stderr, "Final training loss: %f\n", losses.train_losses.back());
-  fprintf(stderr, "Final training error: %f\n", losses.train_errors.back());
-  fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
+  fprintf(stderr, "Final training loss: %f\n", train_loss.loss);
+  fprintf(stderr, "Final training error: %f\n", train_loss.error);
+  fprintf(stderr, "Final testing error: %f\n", test_loss.error);
 
   ALIGNED_FREE(W);
   ALIGNED_FREE(W_tilde);
@@ -360,6 +279,4 @@ gd_losses_t sgd
   ALIGNED_FREE(batch_idx);
   ALIGNED_FREE(batch_X);
   ALIGNED_FREE(batch_ys);
-
-  return losses;
 }

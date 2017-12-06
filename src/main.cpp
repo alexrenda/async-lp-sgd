@@ -31,40 +31,11 @@ int main() {
   unsigned int *ys_idx_test = test.labels_idx.data();
   float *ys_oh_test = test.labels_oh.data();
 
-  const unsigned int niter = n_train;
+  const unsigned int nepochs = 100;
+  const unsigned int niter = 1000;
 
-  gd_losses_t losses = sgd(X_train, ys_idx_train, ys_oh_train, n_train,
-                           X_test, ys_idx_test, ys_oh_test, n_test,
-                           d, c, 10, niter, 0.0001, 1,
-                           16, 1234);
-
-  size_t n_losses = losses.times.size();
-
-  assert(losses.times.size() == n_losses);
-  assert(losses.grad_sizes.size() == n_losses);
-
-#ifdef LOSSES
-  assert(losses.train_losses.size() == n_losses);
-  assert(losses.train_errors.size() == n_losses);
-  assert(losses.test_errors.size() == n_losses);
-#endif /* LOSSES */
-
-#ifndef RAW_OUTPUT
-  for (unsigned int i = 0; i < n_losses; i++) {
-    printf(
-#ifdef LOSSES
-           "%f %f %f %f %f\n",
-#else
-           "%f %f\n",
-#endif /* LOSSES */
-           losses.times[i],
-           losses.grad_sizes[i]
-#ifdef LOSSES
-           , losses.train_losses[i],
-           losses.train_errors[i],
-           losses.test_errors[i]
-#endif /* LOSSES */
-           );
-  }
-#endif  /* RAW_OUTPUT */
+  sgd(X_train, ys_idx_train, ys_oh_train, n_train,
+      X_test, ys_idx_test, ys_oh_test, n_test,
+      d, c, nepochs, niter, 0.0001, 1,
+      16, 1234);
 }
