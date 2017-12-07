@@ -7,15 +7,18 @@ import fileinput
 import collections
 import os
 
+ic_str = 'Iteration count'
+wct_str = 'Wall clock time (s)'
+
 figures = [
-    'Gradient size vs iteration count',
-    'Gradient size vs wall clock time',
-    'Distance to optimum vs iteration count',
-    'Distance to optimum vs wall clock time',
-    'Training loss vs iteration count',
-    'Training loss vs wall clock time',
-    'Errors vs iteration count',
-    'Errors vs wall clock time',
+    ('Gradient norm', ic_str),
+    ('Gradient norm', wct_str),
+    ('Distance to optimum', ic_str),
+    ('Distance to optimum', wct_str),
+    ('Training loss', ic_str),
+    ('Training loss', wct_str),
+    ('Test error', ic_str),
+    ('Test error', wct_str),
 ]
 
 def main():
@@ -28,15 +31,18 @@ def main():
         itcounts[fname] += 1
         i = itcounts[fname]
 
-        iterations[fname].append(i)
-        fields[fname].append(map(float, line.split()))
+        if (i % 100 == 0):
+            iterations[fname].append(i)
+            fields[fname].append(map(float, line.split()))
 
     all_iterations = {f: np.array(iters) for (f, iters) in iterations.items()}
     all_vals = {f: list(map(np.array, zip(*fs))) for (f, fs) in fields.items()}
 
-    for figidx, title in enumerate(figures):
+    for figidx, (yaxis, xaxis) in enumerate(figures):
         plt.figure(figidx)
-        plt.title(title)
+        plt.title('{} vs {}'.format(yaxis, xaxis))
+        plt.xlabel(xaxis)
+        plt.ylabel(yaxis)
 
     for fname in all_iterations:
         iterations = all_iterations[fname]
@@ -75,11 +81,11 @@ def main():
             test_errors = vals[5]
 
             plt.figure(6)
-            plt.plot(iterations, train_errors, label='{} training error'.format(lname))
+            # plt.plot(iterations, train_errors, label='{} training error'.format(lname))
             plt.plot(iterations, test_errors, label='{} testing error'.format(lname))
 
             plt.figure(7)
-            plt.plot(times, train_errors, label='{} training error'.format(lname))
+            # plt.plot(times, train_errors, label='{} training error'.format(lname))
             plt.plot(times, test_errors, label='{} testing error'.format(lname))
         except:
             continue
