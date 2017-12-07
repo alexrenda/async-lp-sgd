@@ -90,8 +90,6 @@ void sgd
   // gradient
   float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
   __assume_aligned(G_all, ALIGNMENT);
-  float* __restrict__ mu_tilde = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
-  __assume_aligned(mu_tilde, ALIGNMENT);
 
   // tmp array for holding batch X
   float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
@@ -150,13 +148,6 @@ void sgd
 
       float* __restrict__ G = &G_all[c * W_lda * tno];
       __assume_aligned(G, ALIGNMENT);
-
-      for (unsigned int j = 0; j < c; j++) {
-        #pragma vector aligned
-        for (unsigned int k = 0; k < d; k++) {
-          G[j * W_lda + k] = mu_tilde[j * W_lda + k];
-        }
-      }
 
       for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
         const unsigned int rand_idx = batch_dists[bidx](gen);
@@ -255,7 +246,6 @@ void sgd
   ALIGNED_FREE((float*) ys_oh_test);
   ALIGNED_FREE((float*) scratch_all);
   ALIGNED_FREE(G_all);
-  ALIGNED_FREE(mu_tilde);
   ALIGNED_FREE(batch_idx);
   ALIGNED_FREE(batch_X);
   ALIGNED_FREE(batch_ys);
