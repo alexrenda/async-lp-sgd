@@ -1,0 +1,1 @@
+time nrm trainloss trainerror testloss
