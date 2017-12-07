@@ -267,13 +267,15 @@ gd_losses_t sgd
 
 #pragma vector aligned
     for (unsigned int j = 0; j < d; j++) {
+      /*
       if (absf(G[j]) > 1e-6) {
         m_m[j] = beta_1 * m_m[j] + (1 - beta_1) * G[j];
         m_v[j] = beta_2 * m_v[j] + (1 - beta_2) * G[j] * G[j];
 
         W[j] -= alpha_t * m_m[j] / (sqrtf(m_v[j]) + 1e-8);
       }
-      // W[j] -= alpha * G[j];
+      */
+      W[j] -= alpha * G[j];
     }
 
     nrm = cblas_snrm2(d, G, 1);
