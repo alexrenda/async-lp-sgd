@@ -58,6 +58,12 @@ gd_losses_t sgd
   float* __restrict__ W = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(W, ALIGNMENT);
 
+  float* __restrict__ W_tilde = (float*) ALIGNED_MALLOC(d * sizeof(float));
+  __assume_aligned(W_tilde, ALIGNMENT);
+
+  float* __restrict__ mu_tilde = (float*) ALIGNED_MALLOC(d * sizeof(float));
+  __assume_aligned(mu_tilde, ALIGNMENT);
+
   const float* __restrict__ W_opt = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(W_opt, ALIGNMENT);
   memcpy((float*) W_opt, W_opt_in, d * sizeof(float));
@@ -97,11 +103,9 @@ gd_losses_t sgd
   float* __restrict__ G_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
   __assume_aligned(G_all, ALIGNMENT);
   memset(G_all, 0, ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
-  for (int t = 0; t < omp_get_max_threads(); t++) {
-    for (int j = 0; j < d; j++) {
-      G_all[t * ALIGN_ABOVE(d) + j] = 0;
-    }
-  }
+  float* __restrict__ G_2_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
+  __assume_aligned(G_2_all, ALIGNMENT);
+  memset(G_2_all, 0, ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
 
   // timing
   unsigned int* __restrict__ t_all = (unsigned int*) ALIGNED_MALLOC(omp_get_max_threads() * sizeof(unsigned int));
@@ -200,8 +204,17 @@ gd_losses_t sgd
   fflush(stderr);
 #endif /* PROGRESS */
 
+  for (int _epoch = 0; _epoch < 10; _epoch++) {
+
+    memcpy(W_tilde, W, d * sizeof(float));
+    memset(mu_tilde, 0, d * sizeof(float));
+    logistic_gradient_batch(mu_tilde, W_tilde, X_train, X_lda,
+                            ys_idx_train,
+                            n_train, d, lambda, scratch_all);
+
+
 #pragma omp parallel for schedule(guided)
-  for (unsigned int _iter = 0; _iter < niter; _iter++) {
+  for (unsigned int _iter = 0; _iter < niter / 10; _iter++) {
     unsigned int tno = omp_get_thread_num();
 
     const int m_t = t_all[tno]++;
@@ -231,6 +244,9 @@ gd_losses_t sgd
 
     float* __restrict__ G = &G_all[ALIGN_ABOVE(d) * tno];
     __assume_aligned(G, ALIGNMENT);
+
+    float* __restrict__ G_2 = &G_2_all[ALIGN_ABOVE(d) * tno];
+    __assume_aligned(G_2, ALIGNMENT);
 
     unsigned int* __restrict__ batch_idx = &batch_idx_all[ALIGN_ABOVE(n_train) * tno];
     __assume_aligned(batch_idx, ALIGNMENT);
@@ -264,16 +280,22 @@ gd_losses_t sgd
                             batch_ys_idx,
                             batch_size, d, lambda, scratch);
 
+    logistic_gradient_batch(G_2, W_tilde, batch_X, X_lda,
+                            batch_ys_idx,
+                            batch_size, d, lambda, scratch);
+
 
 #pragma vector aligned
     for (unsigned int j = 0; j < d; j++) {
+      /*
       if (absf(G[j]) > 1e-6) {
         m_m[j] = beta_1 * m_m[j] + (1 - beta_1) * G[j];
         m_v[j] = beta_2 * m_v[j] + (1 - beta_2) * G[j] * G[j];
 
         W[j] -= alpha_t * m_m[j] / (sqrtf(m_v[j]) + 1e-8);
-      }
-      // W[j] -= alpha * G[j];
+        }*/
+
+      W[j] -= alpha * (G[j] - G_2[j] + mu_tilde[j]);
     }
 
     nrm = cblas_snrm2(d, G, 1);
@@ -332,6 +354,7 @@ gd_losses_t sgd
     fflush(stderr);
 #endif /* PROGRESS */
   }
+  }
 
 #ifdef PROGRESS
   fprintf(stderr, "\n");
@@ -363,6 +386,7 @@ gd_losses_t sgd
   fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
 
   ALIGNED_FREE(W);
+  ALIGNED_FREE(W_tilde);
   ALIGNED_FREE((float*) X_train);
   ALIGNED_FREE((int*) ys_idx_train);
   ALIGNED_FREE((float*) ys_oh_train);
