@@ -32,6 +32,8 @@ void sgd
   omp_set_num_threads(1);
 #endif
 
+  fprintf(stderr, "Number of threads: %d\n", omp_get_max_threads());
+
   // gd_losses_t losses;
 
   // initialize randoms
@@ -131,23 +133,12 @@ void sgd
 
   timing_t grad_timer = timing_t();
 
+  printf("time nrm trainloss trainerror testloss\n");
+
   fprintf(stderr, "#/# EPOCH | #/# ITERATION | TRAIN LOSS | TRAIN ERR | NORM | TEST ERR | WC TIME\n");
   fflush(stderr);
 
-  double start_time = omp_get_wtime();
   for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
-
-    for (unsigned int j = 0; j < c; j++) {
-      #pragma vector aligned
-      for (unsigned int k = 0; k < d; k++) {
-        W_tilde[j * W_lda + k] = W[j * W_lda + k];
-      }
-    }
-
-    memset(mu_tilde, 0, sizeof(float) * c * W_lda);
-    multinomial_gradient_batch(mu_tilde, W, W_lda, X_train, X_lda,
-                               ys_oh_train, ys_oh_lda,
-                               n_train, d, c, 1, lambda, scratch_all);
 
     grad_timer.start_timing_round();
 
@@ -159,8 +150,6 @@ void sgd
 
       float* __restrict__ G = &G_all[c * W_lda * tno];
       __assume_aligned(G, ALIGNMENT);
-
-      // #pragma omp critical
 
       for (unsigned int j = 0; j < c; j++) {
         #pragma vector aligned
@@ -192,14 +181,9 @@ void sgd
         }
       }
 
-      multinomial_gradient_batch(G, W_tilde, W_lda, batch_X, X_lda,
-                                 batch_ys, ys_oh_lda,
-                                 batch_size, d, c, -1, lambda, scratch);
-
       multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
                                  batch_ys, ys_oh_lda,
                                  batch_size, d, c, 1, lambda, scratch);
-
 
       #pragma vector aligned
       for (unsigned int j = 0; j < c; j++) {
@@ -224,10 +208,6 @@ void sgd
                                         n_test, d, c, lambda, scratch);
 
     float nrm = 0;
-    // for (unsigned int k = 0 ; k < c; k++) {
-    //   nrm += cblas_snrm2(d, &G[k * W_lda], 1);
-    // }
-    // nrm /= c;
 
     printf(
            "%f %f %f %f %f\n",
