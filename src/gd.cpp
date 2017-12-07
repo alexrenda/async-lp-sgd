@@ -53,10 +53,12 @@ void sgd
   assert(ys_oh_lda % ALIGNMENT == 0);
   __assume(ys_oh_lda % ALIGNMENT == 0);
 
-  float* __restrict__ W = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
-  __assume_aligned(W, ALIGNMENT);
-  float* __restrict__ W_tilde = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
-  __assume_aligned(W_tilde, ALIGNMENT);
+  auto max_threads = omp_get_max_threads();
+
+  float* __restrict__ W_shared = (float*) ALIGNED_MALLOC(c * W_lda * sizeof(float));
+  __assume_aligned(W_shared, ALIGNMENT);
+  float* __restrict__ W_private_scratch = (float*) ALIGNED_MALLOC(max_threads * c * W_lda * sizeof(float));
+  __assume_aligned(W_private_scratch, ALIGNMENT);
 
   const float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
   __assume_aligned(X_train, ALIGNMENT);
@@ -88,18 +90,23 @@ void sgd
 
 
   // gradient
-  float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * omp_get_max_threads() * sizeof(float));
+  float* __restrict__ G_all = (float*) ALIGNED_MALLOC(c * W_lda * max_threads * sizeof(float));
   __assume_aligned(G_all, ALIGNMENT);
 
   // tmp array for holding batch X
-  float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
-  __assume_aligned(batch_X, ALIGNMENT);
+  int batch_X_size = batch_size * X_lda;
+  float *batch_X_scratch = (float*) ALIGNED_MALLOC(sizeof(float) * batch_X_size * max_threads);
+  __assume_aligned(batch_X_scratch, ALIGNMENT);
+
   // tmp array for holding one-hot batch ys
-  float *batch_ys = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * ys_oh_lda);
-  __assume_aligned(batch_ys, ALIGNMENT);
+  int batch_ys_size = batch_size * ys_oh_lda;
+  float *batch_ys_scratch = (float*) ALIGNED_MALLOC(sizeof(float) * batch_ys_size * max_threads);
+  __assume_aligned(batch_ys_scratch, ALIGNMENT);
+
   // vector used for fisher-yates-esque batch selection w/out replacement
-  unsigned int *batch_idx = (unsigned int*) ALIGNED_MALLOC(sizeof(unsigned int) * n_train);
-  __assume_aligned(batch_idx, ALIGNMENT);
+  int batch_idx_size = n_train;
+  unsigned int *batch_idx_scratch = (unsigned int*) ALIGNED_MALLOC(sizeof(unsigned int) * batch_idx_size * max_threads);
+  __assume_aligned(batch_idx_scratch, ALIGNMENT);
 
   // collection of uniform distributions for batch selection
   std::vector< std::uniform_int_distribution<unsigned int> > batch_dists;
@@ -110,8 +117,10 @@ void sgd
   __assume_aligned(scratch_all, ALIGNMENT);
 
   // initialize the batch selection vector (invariant is that it's an unordered set)
-  for (unsigned int i = 0; i < n_train; i++) {
-    batch_idx[i] = i;
+  for (int tno = 0; tno < max_threads; ++tno) {
+    for (unsigned int i = 0; i < n_train; i++) {
+      batch_idx_scratch[tno * batch_idx_size + i] = i;
+    }
   }
 
   // initialize each distribution (this is ugly... TODO: any better way?)
@@ -122,7 +131,7 @@ void sgd
   // initialize weight vector
   #pragma vector aligned
   for (unsigned int j = 0; j < c; j++) {
-    float* __restrict__ Wj = &W[j * W_lda];
+    float* __restrict__ Wj = &W_shared[j * W_lda];
 
     for (unsigned int k = 0; k < d; k++) {
       Wj[k] = normal_dist(gen);
@@ -131,7 +140,7 @@ void sgd
 
   timing_t grad_timer = timing_t();
 
-  printf("time nrm trainloss trainerror testloss\n");
+  printf("time niter trainloss trainerror testloss\n");
 
   fprintf(stderr, "#/# EPOCH | #/# ITERATION | TRAIN LOSS | TRAIN ERR | NORM | TEST ERR | WC TIME\n");
   fflush(stderr);
@@ -146,8 +155,20 @@ void sgd
       float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
       __assume_aligned(scratch, ALIGNMENT);
 
+    #ifdef MEM_COPY
+      float* __restrict__ W_private = &W_private_scratch[tno * c * W_lda];
+      memcpy(W_private, W_shared, c * W_lda * sizeof(float));
+    #else
+      float* W_private = W_shared;
+      __assume_aligned(W_private, ALIGNMENT);
+    #endif
+
       float* __restrict__ G = &G_all[c * W_lda * tno];
       __assume_aligned(G, ALIGNMENT);
+
+      float* __restrict__ batch_X = &batch_X_scratch[tno * batch_X_size];
+      float* __restrict__ batch_ys = &batch_ys_scratch[tno * batch_ys_size];
+      unsigned int* __restrict__ batch_idx = &batch_idx_scratch[tno * batch_idx_size];
 
       for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
         const unsigned int rand_idx = batch_dists[bidx](gen);
@@ -172,18 +193,24 @@ void sgd
         }
       }
 
-      multinomial_gradient_batch(G, W, W_lda, batch_X, X_lda,
+      multinomial_gradient_batch(G, W_private, W_lda, batch_X, X_lda,
                                  batch_ys, ys_oh_lda,
                                  batch_size, d, c, 1, lambda, scratch);
 
+      // #pragma omp atomic weight_vector
       #pragma vector aligned
       for (unsigned int j = 0; j < c; j++) {
-        float* __restrict__ Wj = &W[j * W_lda];
+        float* __restrict__ Wj = &W_shared[j * W_lda];
         float* __restrict__ Gj = &G[j * W_lda];
 
         #pragma vector aligned
         for (unsigned int k = 0; k < d; k++) {
-          Wj[k] -= alpha * Gj[k];
+          #ifdef ATOMIC_UPDATES
+            #pragma omp atomic
+            Wj[k] -= alpha * Gj[k];
+          #else
+            Wj[k] -= alpha * Gj[k];
+          #endif
         }
       }
     }
@@ -193,17 +220,16 @@ void sgd
     float* __restrict__ scratch = scratch_all;
     __assume_aligned(scratch, ALIGNMENT);
 
-    loss_t train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train,
+    loss_t train_loss = multinomial_loss(W_shared, W_lda, X_train, X_lda, ys_idx_train,
                                          n_train, d, c, lambda, scratch);
-    loss_t test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test,
+    loss_t test_loss = multinomial_loss(W_shared, W_lda, X_test, X_lda, ys_idx_test,
                                         n_test, d, c, lambda, scratch);
 
-    float nrm = 0;
 
     printf(
-           "%f %f %f %f %f\n",
+           "%f %d %f %f %f\n",
            grad_timer.total_time(),
-           nrm,
+           niter*(_epoch+1),
            train_loss.loss,
            train_loss.error,
            test_loss.error
@@ -211,6 +237,7 @@ void sgd
     fflush(stdout);
 
     {
+      float nrm = 0;
       fprintf(stderr,
               "%4d %4d | %6d %6d | %10.2f | %9.3f | %4.2f | %8.3f | %7.3f\n",
               _epoch, nepoch, niter*(_epoch+1), niter,
@@ -226,18 +253,18 @@ void sgd
 
   fprintf(stderr, "Grad time per step: %f\n", grad_timer.time_per_step());
 
-  auto train_loss = multinomial_loss(W, W_lda, X_train, X_lda, ys_idx_train, n_train,
+  auto train_loss = multinomial_loss(W_shared, W_lda, X_train, X_lda, ys_idx_train, n_train,
                                      d, c, lambda, scratch_all);
 
-  auto test_loss = multinomial_loss(W, W_lda, X_test, X_lda, ys_idx_test, n_test,
+  auto test_loss = multinomial_loss(W_shared, W_lda, X_test, X_lda, ys_idx_test, n_test,
                                     d, c, lambda, scratch_all);
 
   fprintf(stderr, "Final training loss: %f\n", train_loss.loss);
   fprintf(stderr, "Final training error: %f\n", train_loss.error);
   fprintf(stderr, "Final testing error: %f\n", test_loss.error);
 
-  ALIGNED_FREE(W);
-  ALIGNED_FREE(W_tilde);
+  ALIGNED_FREE(W_shared);
+  ALIGNED_FREE(W_private_scratch);
   ALIGNED_FREE((float*) X_train);
   ALIGNED_FREE((unsigned int*) ys_idx_train);
   ALIGNED_FREE((float*) ys_oh_train);
@@ -246,7 +273,7 @@ void sgd
   ALIGNED_FREE((float*) ys_oh_test);
   ALIGNED_FREE((float*) scratch_all);
   ALIGNED_FREE(G_all);
-  ALIGNED_FREE(batch_idx);
-  ALIGNED_FREE(batch_X);
-  ALIGNED_FREE(batch_ys);
+  ALIGNED_FREE(batch_idx_scratch);
+  ALIGNED_FREE(batch_X_scratch);
+  ALIGNED_FREE(batch_ys_scratch);
 }

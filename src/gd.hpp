@@ -2,6 +2,8 @@
 #define GD_HPP
 
 #define HOGWILD
+#define MEM_COPY
+#define ATOMIC_UPDATE
 
 #include <vector>
 
