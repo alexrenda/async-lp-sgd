@@ -1,4 +1,4 @@
-OPTFLAGS = -O3 -ansi-alias -qopt-report=5 -qoverride-limits -no-prec-div -ipo -xCORE-AVX2
+OPTFLAGS = -O3 -ansi-alias -qopt-report=3 -qoverride-limits -no-prec-div -ipo -xCORE-AVX2
 
 CFLAGS = -std=c++11 -qopenmp
 LDFLAGS = -qopenmp
