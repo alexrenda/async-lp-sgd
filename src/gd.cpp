@@ -331,7 +331,7 @@ gd_losses_t sgd
       printf(
              "%f %f"
 #ifdef LOSSES
-             "%f %f %f"
+             " %f %f %f"
 #endif /* LOSSES */
              "\n",
 
