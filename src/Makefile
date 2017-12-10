@@ -25,7 +25,7 @@ main: $(OBJ)
 	$(CC) $(CFLAGS) $(OPTFLAGS) $(INCBLAS) -Wall -MMD -c -o $@ $<
 
 clean:
-	rm -f main *.o *.d
+	rm -f main sgd svrg adam_serial adam_shared adam_private *.o *.d
 
 # Optimize build with auto-generated dependencies.
 -include $(SRC:%.cpp=%.d)

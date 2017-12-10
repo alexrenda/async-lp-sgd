@@ -16,4 +16,4 @@ cd "$PBS_O_WORKDIR"
 
 module load intel
 
-./main ${GD_ALPHA?} > "real_data/${GD_TYPE?} ${GD_ALPHA?}"
+"./${GD_TYPE?}" "${GD_ALPHA?}" > "real_data/${GD_TYPE?} ${GD_ALPHA?}"
