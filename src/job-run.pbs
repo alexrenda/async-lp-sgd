@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# We only need a single processor to print hello, so ppn=1.
+# A modest timeout of 1 minute is used, which should be
+# plenty of time for this job to complete.
+
+#PBS -l nodes=1:ppn=12
+#PBS -l walltime=0:05:00
+#PBS -N gradient
+#PBS -k n
+
+# Enter the directory where this script (and our executable) is.
+cd "$PBS_O_WORKDIR"
+
+# Run the executable.
+
+module load intel
+
+./main ${GD_ALPHA?} > real_data ${GD_TYPE?}_${GD_ALPHA?}
