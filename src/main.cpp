@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
   int *ys_idx_test = test.labels_idx;
   float *ys_oh_test = test.labels_oh;
 
-  const unsigned int niter = 1000;
+  const unsigned int niter = 10000;
 
   sgd(X_train, ys_idx_train, ys_oh_train, n_train,
       X_test, ys_idx_test, ys_oh_test,
