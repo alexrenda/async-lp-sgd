@@ -2,7 +2,7 @@
 #define GD_HPP
 
 
-#define PROGRESS
+// #define PROGRESS
 #define LOSSES
 #define RAW_OUTPUT
 
