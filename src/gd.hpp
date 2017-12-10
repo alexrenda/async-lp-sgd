@@ -6,15 +6,11 @@
 #define LOSSES
 #define RAW_OUTPUT
 
-enum gd_type {
-  ADAM_SERIAL,
-  ADAM_SHARED,
-  ADAM_PRIVATE,
-  SVRG,
-  SGD
-};
-
-#define GD_TYPE ADAM_SERIAL
+// #define ADAM_SERIAL
+// #define ADAM_SHARED
+// #define ADAM_PRIVATE
+// #define SVRG
+// #define SGD
 
 void sgd
 (

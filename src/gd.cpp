@@ -31,7 +31,7 @@ void sgd
  const size_t batch_size,       // batch size
  const unsigned int seed        // random seed
  ) {
-#if GD_TYPE == ADAM_SERIAL || GD_TYPE == SVRG || GD_TYPE == SGD
+#if defined(ADAM_SERIAL) || defined(SVRG) || defined(SGD)
   omp_set_num_threads(1);
 #endif
 
@@ -111,14 +111,14 @@ void sgd
   }
 
 
-#if (GD_TYPE == ADAM_SERIAL || GD_TYPE == ADAM_SHARED)
+#if defined(ADAM_SERIAL) || defined(ADAM_SHARED)
   float* __restrict__ m = (float*) ALIGNED_MALLOC(d * sizeof(float));
   memset(m, 0, d * sizeof(float));
   __assume_aligned(m, ALIGNMENT);
   float* __restrict__ v = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(v, ALIGNMENT);
   memset(v, 0, d * sizeof(float));
-#elif GD_TYPE == ADAM_PRIVATE
+#elif defined(ADAM_PRIVATE)
   float* __restrict__ m_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
   __assume_aligned(m_all, ALIGNMENT);
   memset(m_all, 0, ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
@@ -199,7 +199,7 @@ void sgd
   fflush(stderr);
 #endif /* PROGRESS */
 
-#if GD_TYPE == SVRG
+#if defined(SVRG)
   unsigned int nepoch = 10;
   unsigned int niter_per_epoch = omp_get_max_threads() * niter / 10;
 #else
@@ -211,7 +211,7 @@ void sgd
   full_timer.start_timing_round();
 
   for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
-#if GD_TYPE == SVRG
+#if defined(SVRG)
     memcpy(W_tilde, W, d * sizeof(float));
     memset(mu_tilde, 0, d * sizeof(float));
     logistic_gradient_batch(mu_tilde, W_tilde, X_train, X_lda,
@@ -225,10 +225,10 @@ void sgd
 
       const int m_t = t_all[tno]++;
 
-#if GD_TYPE == ADAM_SERIAL || GD_TYPE == ADAM_PRIVATE || GD_TYPE == ADAM_SHARED
+#if defined(ADAM_SERIAL) || defined(ADAM_PRIVATE) || defined(ADAM_SHARED)
       float t_exp;
 
-#  if GD_TYPE == ADAM_SHARED
+#  if defined(ADAM_SERIAL) || defined(ADAM_SHARED)
       t_exp = m_t * omp_get_max_threads() + thread_dist(gen_all[tno]);
 
       float* __restrict__ m_m = m;
@@ -254,7 +254,7 @@ void sgd
       float* __restrict__ G = &G_all[ALIGN_ABOVE(d) * tno];
       __assume_aligned(G, ALIGNMENT);
 
-#if GD_TYPE == SVRG
+#if defined(SVRG)
       float* __restrict__ G_tilde = &G_tilde_all[ALIGN_ABOVE(d) * tno];
       __assume_aligned(G_tilde, ALIGNMENT);
 #endif
@@ -290,26 +290,25 @@ void sgd
       logistic_gradient_batch(G, W, batch_X, X_lda,
                               batch_ys_idx,
                               batch_size, d, lambda, scratch);
-#if GD_TYPE == SVRG
+#if defined(SVRG)
       memset(G_tilde, 0, d * sizeof(float));
       logistic_gradient_batch(G_tilde, W_tilde, batch_X, X_lda,
                               batch_ys_idx,
                               batch_size, d, lambda, scratch);
 #endif
 
-
 #pragma vector aligned
       for (unsigned int j = 0; j < d; j++) {
-#if GD_TYPE == ADAM_SERIAL || GD_TYPE == ADAM_PRIVATE || GD_TYPE == ADAM_SHARED
+#if defined(ADAM_SERIAL) || defined(ADAM_PRIVATE) || defined(ADAM_SHARED)
         if (fabs(G[j]) > 1e-6) {
           m_m[j] = beta_1 * m_m[j] + (1 - beta_1) * G[j];
           m_v[j] = beta_2 * m_v[j] + (1 - beta_2) * G[j] * G[j];
 
           W[j] -= alpha_t * m_m[j] / (sqrtf(m_v[j]) + 1e-8);
         }
-#elif GD_TYPE == SGD
+#elif defined(SGD)
         W[j] -= alpha * G[j] / sqrtf(m_t);
-#elif GD_TYPE == SVRG
+#elif defined(SVRG)
         W[j] -= alpha * (G[j] - G_tilde[j] + mu_tilde[j]);
 #else
 #  error Need a GD type
@@ -381,10 +380,10 @@ void sgd
   ALIGNED_FREE(batch_ys_idx);
   ALIGNED_FREE(t_all);
 
-#if (GD_TYPE == ADAM_SERIAL || GD_TYPE == ADAM_SHARED)
+#if defined(ADAM_SERIAL) || defined(ADAM_SHARED)
   ALIGNED_FREE(m);
   ALIGNED_FREE(v);
-#elif GD_TYPE == ADAM_PRIVATE
+#elif defined(ADAM_PRIVATE)
   ALIGNED_FREE(m_all);
   ALIGNED_FREE(v_all);
 #endif
