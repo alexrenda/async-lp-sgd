@@ -174,7 +174,9 @@ loss_t logistic_loss
 
 #pragma vector aligned
   for (unsigned int i = 0; i < n; i++) {
-    loss += logf(1 + expf(- y[i] * XW[i]));
+    float right = - y[i] * XW[i];
+    float max = fmax(0, right);
+    loss += max + logf(expf(-max) + expf(right - max));
     pos += XW[i] > 0;
     correct += (y[i] * XW[i]) > 0;
   }

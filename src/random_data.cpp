@@ -9,7 +9,7 @@
 float *data_W_true;
 const int data_n_train = 10000;
 const int data_n_test  = 1000;
-const int data_d = 64;
+const int data_d = 4096;
 
 const int data_W_seed = 1239013;
 const int data_train_seed = 943851;
@@ -40,7 +40,12 @@ dataset_t data_get_dataset(const int n, const int seed) {
   for (int i = 0; i < n; i++) {
     float dot_res = 0;
     for (int j = 0; j < data_d; j++) {
-      float datum = data_normal_dist(gen);
+      float datum;
+      if (data_uniform_dist(gen) < 0.01) {
+        datum = data_normal_dist(gen);
+      } else {
+        datum = 0;
+      }
       dot_res += data_W_true[j] * datum;
       res.image[i * data_d + j] = datum;
     }

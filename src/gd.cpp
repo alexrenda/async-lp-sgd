@@ -195,9 +195,9 @@ gd_losses_t sgd
 
 #ifdef PROGRESS
   fprintf(stderr, "#ITER | NORM | DIST TO OPT"
-#ifdef LOSS
+#ifdef LOSSES
           "| TRAIN LOSS | TRAIN ERR"
-#endif /* LOSS */
+#endif /* LOSSES */
           "\n");
   fflush(stderr);
 #endif /* PROGRESS */
