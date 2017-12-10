@@ -201,10 +201,10 @@ void sgd
 
 #if GD_TYPE == SVRG
   unsigned int nepoch = 10;
-  unsigned int niter_per_epoch = niter / 10;
+  unsigned int niter_per_epoch = omp_get_max_threads() * niter / 10;
 #else
   unsigned int nepoch = 1;
-  unsigned int niter_per_epoch = niter;
+  unsigned int niter_per_epoch = omp_get_max_threads() * niter;
 #endif
 
   timing_t full_timer = timing_t();
