@@ -20,7 +20,6 @@ gd_losses_t sgd
  const float* __restrict__ X_test_in,      // n x d
  const int* __restrict__ ys_idx_test_in,   // n x 1
  const float* __restrict__ ys_oh_test_in,  // n x 1
- const float* __restrict__ W_opt_in,       // optimum weight value
  const size_t n_test,                      // num training samples
  const size_t d,                           // data dimensionality
  const size_t c,                           // num classes
@@ -32,7 +31,7 @@ gd_losses_t sgd
  const size_t batch_size,       // batch size
  const unsigned int seed        // random seed
  ) {
-#ifndef HOGWILD
+#if (GD_TYPE != ADAM_SHARED || GD_TYPE != ADAM_PRIVATE)
   omp_set_num_threads(1);
 #endif
 
@@ -58,11 +57,10 @@ gd_losses_t sgd
   float* __restrict__ W = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(W, ALIGNMENT);
 
-  /*
-  const float* __restrict__ W_opt = (float*) ALIGNED_MALLOC(d * sizeof(float));
-  __assume_aligned(W_opt, ALIGNMENT);
-  memcpy((float*) W_opt, W_opt_in, d * sizeof(float));
-  */
+  float* __restrict__ W_tilde = (float*) ALIGNED_MALLOC(d * sizeof(float));
+  __assume_aligned(W_tilde, ALIGNMENT);
+  float* __restrict__ mu_tilde = (float*) ALIGNED_MALLOC(d * sizeof(float));
+  __assume_aligned(mu_tilde, ALIGNMENT);
 
   const float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
   __assume_aligned(X_train, ALIGNMENT);
@@ -104,6 +102,8 @@ gd_losses_t sgd
       G_all[t * ALIGN_ABOVE(d) + j] = 0;
     }
   }
+  float* __restrict__ G_tilde_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
+  __assume_aligned(G_tilde_all, ALIGNMENT);
 
   // timing
   unsigned int* __restrict__ t_all = (unsigned int*) ALIGNED_MALLOC(omp_get_max_threads() * sizeof(unsigned int));
@@ -113,21 +113,21 @@ gd_losses_t sgd
   }
 
 
-#ifdef ADAM_SHARED
+#if (GD_TYPE == ADAM_SERIAL || GD_TYPE == ADAM_SHARED)
   float* __restrict__ m = (float*) ALIGNED_MALLOC(d * sizeof(float));
   memset(m, 0, d * sizeof(float));
   __assume_aligned(m, ALIGNMENT);
   float* __restrict__ v = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(v, ALIGNMENT);
   memset(v, 0, d * sizeof(float));
-#else
+#elif GD_TYPE == ADAM_PRIVATE
   float* __restrict__ m_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
   __assume_aligned(m_all, ALIGNMENT);
   memset(m_all, 0, ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
   float* __restrict__ v_all = (float*) ALIGNED_MALLOC(ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
   __assume_aligned(v_all, ALIGNMENT);
   memset(v_all, 0, ALIGN_ABOVE(d) * omp_get_max_threads() * sizeof(float));
-#endif /* ADAM_SHARED */
+#endif
 
   // tmp array for holding batch X
   float *batch_X = (float*) ALIGNED_MALLOC(sizeof(float) * batch_size * X_lda);
@@ -194,7 +194,7 @@ gd_losses_t sgd
 
 
 #ifdef PROGRESS
-  fprintf(stderr, "#ITER | NORM | DIST TO OPT"
+  fprintf(stderr, "#ITER | NORM"
 #ifdef LOSSES
           "| TRAIN LOSS | TRAIN ERR"
 #endif /* LOSSES */
@@ -202,139 +202,164 @@ gd_losses_t sgd
   fflush(stderr);
 #endif /* PROGRESS */
 
-#pragma omp parallel for schedule(guided)
-  for (unsigned int _iter = 0; _iter < niter; _iter++) {
-    unsigned int tno = omp_get_thread_num();
-
-    const int m_t = t_all[tno]++;
-
-    float t_exp;
-#ifdef ADAM_SHARED
-    t_exp = m_t * omp_get_max_threads() + thread_dist(gen_all[tno]);
-
-    float* __restrict__ m_m = m;
-    float* __restrict__ m_v = v;
+#if GD_TYPE == SVRG
+  unsigned int nepoch = 10;
+  unsigned int niter_per_epoch = niter / 10;
 #else
-    t_exp = m_t;
-    float* __restrict__ m_m = &m_all[ALIGN_ABOVE(d) * tno];
-    float* __restrict__ m_v = &v_all[ALIGN_ABOVE(d) * tno];
-#endif /* ADAM_SHARED */
+  unsigned int nepoch = 1;
+  unsigned int niter_per_epoch = niter;
+#endif
 
-    __assume_aligned(m_m, ALIGNMENT);
-    __assume_aligned(m_v, ALIGNMENT);
+  for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
+#if GD_TYPE == SVRG
+    memcpy(W_tilde, W, d * sizeof(float));
+    memset(mu_tilde, 0, d * sizeof(float));
+    logistic_gradient_batch(mu_tilde, W_tilde, X_train, X_lda,
+                            ys_idx_train,
+                            n_train, d, lambda, scratch_all);
+#endif
 
-    float beta_1_t = powf(beta_1, t_exp);
-    float beta_2_t = powf(beta_2, t_exp);
+#pragma omp parallel for schedule(guided)
+    for (unsigned int _iter = 0; _iter < niter_per_epoch; _iter++) {
+      unsigned int tno = omp_get_thread_num();
 
-    float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(t_exp);
+      const int m_t = t_all[tno]++;
 
-    float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
-    __assume_aligned(scratch, ALIGNMENT);
+#if GD_TYPE == ADAM_SERIAL || GD_TYPE == ADAM_PRIVATE || GD_TYPE == ADAM_SHARED
+      float t_exp;
 
-    float* __restrict__ G = &G_all[ALIGN_ABOVE(d) * tno];
-    __assume_aligned(G, ALIGNMENT);
+#  if GD_TYPE == ADAM_SHARED
+      t_exp = m_t * omp_get_max_threads() + thread_dist(gen_all[tno]);
 
-    unsigned int* __restrict__ batch_idx = &batch_idx_all[ALIGN_ABOVE(n_train) * tno];
-    __assume_aligned(batch_idx, ALIGNMENT);
+      float* __restrict__ m_m = m;
+      float* __restrict__ m_v = v;
+#  else
+      t_exp = m_t;
+      float* __restrict__ m_m = &m_all[ALIGN_ABOVE(d) * tno];
+      float* __restrict__ m_v = &v_all[ALIGN_ABOVE(d) * tno];
+#  endif /* ADAM_SHARED */
 
-    for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
-      const unsigned int rand_idx = batch_dists[bidx](gen_all[tno]);
-      const unsigned int idx = batch_idx[rand_idx];
-      batch_idx[rand_idx] = batch_idx[n_train - 1 - bidx];
-      batch_idx[n_train - 1 - bidx] = idx;
+      __assume_aligned(m_m, ALIGNMENT);
+      __assume_aligned(m_v, ALIGNMENT);
 
-      float *x_dst = &batch_X[bidx * X_lda];
-      const float *x_src = &X_train[idx * X_lda];
+      float beta_1_t = powf(beta_1, t_exp);
+      float beta_2_t = powf(beta_2, t_exp);
+
+      float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(t_exp);
+#endif
+
+      float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
+      __assume_aligned(scratch, ALIGNMENT);
+
+      float* __restrict__ G = &G_all[ALIGN_ABOVE(d) * tno];
+      __assume_aligned(G, ALIGNMENT);
+
+#if GD_TYPE == SVRG
+      float* __restrict__ G_tilde = &G_tilde_all[ALIGN_ABOVE(d) * tno];
+      __assume_aligned(G_tilde, ALIGNMENT);
+#endif
+
+      unsigned int* __restrict__ batch_idx = &batch_idx_all[ALIGN_ABOVE(n_train) * tno];
+      __assume_aligned(batch_idx, ALIGNMENT);
+
+      for (unsigned int bidx = 0; bidx < batch_size; bidx++) {
+        const unsigned int rand_idx = batch_dists[bidx](gen_all[tno]);
+        const unsigned int idx = batch_idx[rand_idx];
+        batch_idx[rand_idx] = batch_idx[n_train - 1 - bidx];
+        batch_idx[n_train - 1 - bidx] = idx;
+
+        float *x_dst = &batch_X[bidx * X_lda];
+        const float *x_src = &X_train[idx * X_lda];
+
+#pragma vector aligned
+        for (unsigned int j = 0; j < d; j++) {
+          x_dst[j] = x_src[j];
+        }
+
+        batch_ys_idx[bidx] = ys_idx_train[idx];
+        float *ys_dst = &batch_ys_oh[bidx * ys_oh_lda];
+        const float *ys_src = &ys_oh_train[idx * ys_oh_lda];
+
+#pragma vector aligned
+        for (unsigned int k = 0; k < c; k++) {
+          ys_dst[k] = ys_src[k];
+        }
+      }
+
+      memset(G, 0, d * sizeof(float));
+      logistic_gradient_batch(G, W, batch_X, X_lda,
+                              batch_ys_idx,
+                              batch_size, d, lambda, scratch);
+#if GD_TYPE == SVRG
+      memset(G_tilde, 0, d * sizeof(float));
+      logistic_gradient_batch(G_tilde, W_tilde, batch_X, X_lda,
+                              batch_ys_idx,
+                              batch_size, d, lambda, scratch);
+#endif
+
 
 #pragma vector aligned
       for (unsigned int j = 0; j < d; j++) {
-        x_dst[j] = x_src[j];
+#if GD_TYPE == ADAM_SERIAL || GD_TYPE == ADAM_PRIVATE || GD_TYPE == ADAM_SHARED
+        if (fabs(G[j]) > 1e-6) {
+          m_m[j] = beta_1 * m_m[j] + (1 - beta_1) * G[j];
+          m_v[j] = beta_2 * m_v[j] + (1 - beta_2) * G[j] * G[j];
+
+          W[j] -= alpha_t * m_m[j] / (sqrtf(m_v[j]) + 1e-8);
+        }
+#elif GD_TYPE == SGD
+        W[j] -= alpha * G[j] / sqrtf(m_t);
+#elif GD_TYPE == SVRG
+        W[j] -= alpha * (G[j] - G_tilde[j] + mu_tilde[j]);
+#else
+#  error Need a GD type
+#endif
       }
 
-      batch_ys_idx[bidx] = ys_idx_train[idx];
-      float *ys_dst = &batch_ys_oh[bidx * ys_oh_lda];
-      const float *ys_src = &ys_oh_train[idx * ys_oh_lda];
-
-#pragma vector aligned
-      for (unsigned int k = 0; k < c; k++) {
-        ys_dst[k] = ys_src[k];
-      }
-    }
-
-    memset(G, 0, d * sizeof(float));
-    logistic_gradient_batch(G, W, batch_X, X_lda,
-                            batch_ys_idx,
-                            batch_size, d, lambda, scratch);
-
-
-#pragma vector aligned
-    for (unsigned int j = 0; j < d; j++) {
-      if (fabs(G[j]) > 1e-6) {
-        m_m[j] = beta_1 * m_m[j] + (1 - beta_1) * G[j];
-        m_v[j] = beta_2 * m_v[j] + (1 - beta_2) * G[j] * G[j];
-
-        W[j] -= alpha_t * m_m[j] / (sqrtf(m_v[j]) + 1e-8);
-      }
-      // W[j] -= alpha * G[j];
-    }
-
-    nrm = cblas_snrm2(d, G, 1);
-
-    /*
-    float dto = 0;
-    for (unsigned int j = 0; j < d; j++) {
-      float dst = W[j] - W_opt[j];
-      dto += dst * dst;
-    }
-    dto = sqrtf(dto);
-    */
+      nrm = cblas_snrm2(d, G, 1);
 
 #ifdef LOSSES
-    loss_t train_loss, test_loss;
-    train_loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
-                               d, lambda, scratch);
-    test_loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
-                              d, lambda, scratch);
+      loss_t train_loss, test_loss;
+      train_loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
+                                 d, lambda, scratch);
+      test_loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
+                                d, lambda, scratch);
 
 #endif /* LOSSES */
 
 #ifdef RAW_OUTPUT
-    printf(
+      printf(
+             "%f %f"
 #ifdef LOSSES
-           "%f %f %f %f %f %f\n",
-#else
-           "%f %f %f\n",
+             "%f %f %f"
 #endif /* LOSSES */
-           full_timer.total_time(),
-           nrm,
-           0.0 /*dto*/
+             "\n",
+
+             full_timer.total_time(),
+             nrm
 #ifdef LOSSES
-           , train_loss.loss,
-           train_loss.error,
-           test_loss.error
+             , train_loss.loss,
+             train_loss.error,
+             test_loss.error
 #endif /* LOSSES */
-           );
-    // fflush(stdout);
+             );
 #endif  /* RAW_OUTPUT */
 
 #ifdef PROGRESS
-    unsigned int it = m_t * omp_get_max_threads();
-    fprintf(stderr,
-            "%5d | %4.2f | %11.4f"
+      unsigned int it = m_t * omp_get_max_threads();
+      fprintf(stderr,
+              "%5d | %4.2f"
 #ifdef LOSSES
-            " | %10.2f | %9.3f"
+              " | %10.2f | %9.3f"
 #endif /* LOSSES */
-            "\r",
-            it, nrm, 0.0 /*dto*/
+              "\r",
+              it, nrm
 #ifdef LOSSES
-            ,train_loss.loss, train_loss.error
+              ,train_loss.loss, train_loss.error
 #endif /* LOSSES */
-            );
-    if (it % (niter / 10) == 0) {
-      fprintf(stderr, "\n");
-    }
-    fflush(stderr);
+              );
 #endif /* PROGRESS */
+    }
   }
 
 #ifdef PROGRESS
@@ -381,13 +406,13 @@ gd_losses_t sgd
   ALIGNED_FREE(batch_ys_idx);
   ALIGNED_FREE(t_all);
 
-#ifdef ADAM_SHARED
+#if (GD_TYPE == ADAM_SERIAL || GD_TYPE == ADAM_SHARED)
   ALIGNED_FREE(m);
   ALIGNED_FREE(v);
-#else
+#elif GD_TYPE == ADAM_PRIVATE
   ALIGNED_FREE(m_all);
   ALIGNED_FREE(v_all);
-#endif /* ADAM_SHARED */
+#endif
 
 
   return losses;
