@@ -11,7 +11,7 @@
 #include "mblas.hpp"
 #include "timing.hpp"
 
-gd_losses_t sgd
+void sgd
 (
  const float* __restrict__ X_train_in,     // n x d
  const int* __restrict__ ys_idx_train_in,  // n x 1
@@ -31,11 +31,9 @@ gd_losses_t sgd
  const size_t batch_size,       // batch size
  const unsigned int seed        // random seed
  ) {
-#if (GD_TYPE != ADAM_SHARED || GD_TYPE != ADAM_PRIVATE)
+#if GD_TYPE == ADAM_SERIAL || GD_TYPE == SVRG || GD_TYPE == SGD
   omp_set_num_threads(1);
 #endif
-
-  gd_losses_t losses;
 
   // initialize randoms
   std::mt19937 gen_main(seed);
@@ -168,35 +166,34 @@ gd_losses_t sgd
     W[j] = normal_dist(gen_main);
   }
 
-  losses.times.push_back(0);
-  loss_t loss;
+  loss_t train_loss, test_loss;
 
-  loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
-                       d, lambda, scratch_all);
+  train_loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
+                             d, lambda, scratch_all);
 
-  losses.train_losses.push_back(loss.loss);
-  losses.train_errors.push_back(loss.error);
-  losses.train_pos.push_back(loss.pos);
+  test_loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
+                            d, lambda, scratch_all);
 
-  loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
-                       d, lambda, scratch_all);
-
-  losses.test_errors.push_back(loss.error);
-
-  logistic_gradient_batch(G_all, W, X_train, X_lda,
-                          ys_idx_train, n_train, d, lambda, scratch_all);
-
-  float nrm = cblas_snrm2(d, G_all, 1);
-  losses.grad_sizes.push_back(nrm);
-
-  timing_t full_timer = timing_t();
-  full_timer.start_timing_round();
-
+#ifdef RAW_OUTPUT
+  printf(
+         "%f"
+#ifdef LOSSES
+         " %f %f %f"
+#endif /* LOSSES */
+         "\n",
+         0.0
+#ifdef LOSSES
+         , train_loss.loss,
+         train_loss.error,
+         test_loss.error
+#endif /* LOSSES */
+         );
+#endif  /* RAW_OUTPUT */
 
 #ifdef PROGRESS
-  fprintf(stderr, "#ITER | NORM"
+  fprintf(stderr, "ITERATION"
 #ifdef LOSSES
-          "| TRAIN LOSS | TRAIN ERR"
+          " | TRAIN LOSS | TRAIN ERR | TEST ERR"
 #endif /* LOSSES */
           "\n");
   fflush(stderr);
@@ -209,6 +206,9 @@ gd_losses_t sgd
   unsigned int nepoch = 1;
   unsigned int niter_per_epoch = niter;
 #endif
+
+  timing_t full_timer = timing_t();
+  full_timer.start_timing_round();
 
   for (unsigned int _epoch = 0; _epoch < nepoch; _epoch++) {
 #if GD_TYPE == SVRG
@@ -316,27 +316,23 @@ gd_losses_t sgd
 #endif
       }
 
-      nrm = cblas_snrm2(d, G, 1);
 
 #ifdef LOSSES
-      loss_t train_loss, test_loss;
       train_loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
                                  d, lambda, scratch);
       test_loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
                                 d, lambda, scratch);
-
 #endif /* LOSSES */
 
 #ifdef RAW_OUTPUT
       printf(
-             "%f %f"
+             "%f"
 #ifdef LOSSES
              " %f %f %f"
 #endif /* LOSSES */
              "\n",
 
-             full_timer.total_time(),
-             nrm
+             full_timer.total_time()
 #ifdef LOSSES
              , train_loss.loss,
              train_loss.error,
@@ -348,14 +344,14 @@ gd_losses_t sgd
 #ifdef PROGRESS
       unsigned int it = m_t * omp_get_max_threads();
       fprintf(stderr,
-              "%5d | %4.2f"
+              "%9d"
 #ifdef LOSSES
-              " | %10.2f | %9.3f"
+              " | %10.2f | %9.3f | %8.3f"
 #endif /* LOSSES */
               "\r",
-              it, nrm
+              it
 #ifdef LOSSES
-              ,train_loss.loss, train_loss.error
+              ,train_loss.loss, train_loss.error, test_loss.error
 #endif /* LOSSES */
               );
 #endif /* PROGRESS */
@@ -366,30 +362,9 @@ gd_losses_t sgd
   fprintf(stderr, "\n");
 #endif /* PROGRESS */
 
-  losses.times.push_back(full_timer.total_time());
-
-
-  loss = logistic_loss(W, X_train, X_lda, ys_idx_train, n_train,
-                       d, lambda, scratch_all);
-
-  losses.train_losses.push_back(loss.loss);
-  losses.train_errors.push_back(loss.error);
-
-  loss = logistic_loss(W, X_test, X_lda, ys_idx_test, n_test,
-                       d, lambda, scratch_all);
-
-  losses.test_errors.push_back(loss.error);
-
-  logistic_gradient_batch(G_all, W, X_train, X_lda,
-                          ys_idx_train, n_train, d, lambda, scratch_all);
-
-  nrm = cblas_snrm2(d, G_all, 1);
-  losses.grad_sizes.push_back(nrm);
-
-
-  fprintf(stderr, "Final training loss: %f\n", losses.train_losses.back());
-  fprintf(stderr, "Final training error: %f\n", losses.train_errors.back());
-  fprintf(stderr, "Final testing error: %f\n", losses.test_errors.back());
+  fprintf(stderr, "Final training loss: %f\n",  train_loss.loss);
+  fprintf(stderr, "Final training error: %f\n", train_loss.error);
+  fprintf(stderr, "Final testing error: %f\n",  test_loss.error);
 
   ALIGNED_FREE(W);
   ALIGNED_FREE((float*) X_train);
@@ -413,7 +388,4 @@ gd_losses_t sgd
   ALIGNED_FREE(m_all);
   ALIGNED_FREE(v_all);
 #endif
-
-
-  return losses;
 }

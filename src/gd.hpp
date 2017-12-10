@@ -16,19 +16,7 @@ enum gd_type {
 
 #define GD_TYPE ADAM_SERIAL
 
-#include <vector>
-
-typedef struct gd_losses {
-  std::vector<float> train_losses;
-  std::vector<float> train_errors;
-  std::vector<float> train_pos;
-  std::vector<float> grad_sizes;
-  std::vector<float> test_errors;
-  std::vector<float> times;
-} gd_losses_t;
-
-
-gd_losses_t sgd
+void sgd
 (
  const float* __restrict__ X_train_in,     // n x d
  const int* __restrict__ ys_idx_train_in,  // n x 1
