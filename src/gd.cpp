@@ -58,9 +58,11 @@ gd_losses_t sgd
   float* __restrict__ W = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(W, ALIGNMENT);
 
+  /*
   const float* __restrict__ W_opt = (float*) ALIGNED_MALLOC(d * sizeof(float));
   __assume_aligned(W_opt, ALIGNMENT);
   memcpy((float*) W_opt, W_opt_in, d * sizeof(float));
+  */
 
   const float* __restrict__ X_train = (float*) ALIGNED_MALLOC(n_train * X_lda * sizeof(float));
   __assume_aligned(X_train, ALIGNMENT);
@@ -267,7 +269,7 @@ gd_losses_t sgd
 
 #pragma vector aligned
     for (unsigned int j = 0; j < d; j++) {
-      if (absf(G[j]) > 1e-6) {
+      if (fabs(G[j]) > 1e-6) {
         m_m[j] = beta_1 * m_m[j] + (1 - beta_1) * G[j];
         m_v[j] = beta_2 * m_v[j] + (1 - beta_2) * G[j] * G[j];
 
@@ -278,12 +280,14 @@ gd_losses_t sgd
 
     nrm = cblas_snrm2(d, G, 1);
 
+    /*
     float dto = 0;
     for (unsigned int j = 0; j < d; j++) {
       float dst = W[j] - W_opt[j];
       dto += dst * dst;
     }
     dto = sqrtf(dto);
+    */
 
 #ifdef LOSSES
     loss_t train_loss, test_loss;
@@ -303,7 +307,7 @@ gd_losses_t sgd
 #endif /* LOSSES */
            full_timer.total_time(),
            nrm,
-           dto
+           0.0 /*dto*/
 #ifdef LOSSES
            , train_loss.loss,
            train_loss.error,
@@ -321,7 +325,7 @@ gd_losses_t sgd
             " | %10.2f | %9.3f"
 #endif /* LOSSES */
             "\r",
-            it, nrm, dto
+            it, nrm, 0.0 /*dto*/
 #ifdef LOSSES
             ,train_loss.loss, train_loss.error
 #endif /* LOSSES */
