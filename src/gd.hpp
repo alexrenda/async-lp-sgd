@@ -7,7 +7,7 @@
 #define RAW_OUTPUT
 
 // #define ADAM_SERIAL
-// #define ADAM_SHARED
+#define ADAM_SHARED
 // #define ADAM_PRIVATE
 // #define SVRG
 // #define SGD
