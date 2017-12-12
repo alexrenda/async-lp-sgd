@@ -47,5 +47,5 @@ int main(int argc, char **argv) {
   sgd(X_train, ys_idx_train, ys_oh_train, n_train,
       X_test, ys_idx_test, ys_oh_test,
       n_test, d, c, niter, alpha, 0.0002, 0.9, 0.999,
-      32, 1234);
+      16, 1234);
 }
