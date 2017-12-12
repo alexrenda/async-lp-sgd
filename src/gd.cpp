@@ -200,11 +200,11 @@ void sgd
 #endif /* PROGRESS */
 
 #if defined(SVRG)
-  unsigned int nepoch = 10;
-  unsigned int niter_per_epoch = omp_get_max_threads() * niter / 10;
+  unsigned int nepoch = 20;
+  unsigned int niter_per_epoch = niter / nepoch;
 #else
   unsigned int nepoch = 1;
-  unsigned int niter_per_epoch = omp_get_max_threads() * niter;
+  unsigned int niter_per_epoch = niter;
 #endif
 
   timing_t full_timer = timing_t();
@@ -245,7 +245,7 @@ void sgd
       float beta_1_t = powf(beta_1, t_exp);
       float beta_2_t = powf(beta_2, t_exp);
 
-      float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) / sqrtf(t_exp);
+      float alpha_t = alpha * sqrtf(1 - beta_2_t) / (1 - beta_1_t) /sqrtf(m_t);
 #endif
 
       float* __restrict__ scratch = &scratch_all[scratch_size_per_thread * tno];
@@ -304,7 +304,7 @@ void sgd
           m_m[j] = beta_1 * m_m[j] + (1 - beta_1) * G[j];
           m_v[j] = beta_2 * m_v[j] + (1 - beta_2) * G[j] * G[j];
 
-          W[j] -= alpha_t * m_m[j] / (sqrtf(m_v[j]) + 1e-8);
+          W[j] -= alpha_t * m_m[j] / (sqrtf(m_v[j]) + 1e-3);
         }
 #elif defined(SGD)
         W[j] -= alpha * G[j] / sqrtf(m_t);
