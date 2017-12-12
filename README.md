@@ -1,7 +1,9 @@
 # CS 5220 Final
-Hogwild and Buckwild Final Project!
+Hogwild Final Project!
 
 Authors: Alex Renda, Matthew Gharrity, Matt Li
+
+See the `adam` branch for asynchronous Adam implementation and report
 
 To run:
 $ ssh totient
