@@ -27,9 +27,8 @@ def main():
         itcounts[fname] += 1
         i = itcounts[fname]
 
-        if (i % 100 == 0):
-            iterations[fname].append(i)
-            fields[fname].append(map(float, line.split()))
+        iterations[fname].append(i)
+        fields[fname].append(map(float, line.split()))
 
     all_iterations = {f: np.array(iters) for (f, iters) in iterations.items()}
     all_vals = {f: list(map(np.array, zip(*fs))) for (f, fs) in fields.items()}
@@ -69,6 +68,14 @@ def main():
 
     for figidx, title in enumerate(figures):
         plt.figure(figidx)
+        lims = plt.xlim()
+
+        if figidx % 2 == 0:
+            max_lim = min(its[-1] for its in all_iterations.values())
+        else:
+            max_lim = min(vals[0][-1] for vals in all_vals.values())
+
+        plt.xlim([0, max_lim])
         plt.legend()
 
     plt.show()
