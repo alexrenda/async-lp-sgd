@@ -1,2 +1,5 @@
-# CS 5220 Final
-Hogwild and Buckwild Final Project!
+# Asynchronous Adam
+
+Implementation and report on an asynchronous version of Adam (and SGD/SVRG).
+
+See report.pdf for a full technical report!
